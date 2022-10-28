@@ -571,6 +571,10 @@ typedef UINT32 TPM2_PT_PCR;
 #define TPM2_PT_PCR_POLICY       ((TPM2_PT_PCR) 0x00000013) /* a SET bit in the TPMS_PCR_SELECT indicates that the PCR is controlled by policy. This property is only present if the TPM supports policy control of a PCR. */
 #define TPM2_PT_PCR_AUTH         ((TPM2_PT_PCR) 0x00000014) /* a SET bit in the TPMS_PCR_SELECT indicates that the PCR is controlled by an authorization value. This property is only present if the TPM supports authorization control of a PCR. */
 #define TPM2_PT_TPM2_PCR_LAST         ((TPM2_PT_PCR) 0x00000014) /* top of the range of TPM2_PT_PCR properties of the implementation. If the TPM receives a request for a PCR property with a value larger than this the TPM will return a zero length list and set the moreData parameter to NO. NOTE This is an implementation-specific value. The value shown reflects the reference code implementation. */
+#define TPM2_PT_VENDOR_VAR                  ((TPM2_PT) 0xC0000000) /* The group of variable vendor (Infineon) specific properties. */
+#define TPM2_PT_VENDOR_VAR_ENCRYPTDECRYPT2  ((TPM2_PT) (TPM2_PT_VENDOR_VAR + 5)) /* Bytes 1-2: Indicates whether configuration is enabled. Bytes 3-4: Indicates whether feature is permanently locked */
+#define TPM2_PT_VENDOR_VAR_CHANGEEPS        ((TPM2_PT) (TPM2_PT_VENDOR_VAR + 6)) /* Bytes 1-2: Indicates whether configuration is enabled. Bytes 3-4: Indicates whether feature is permanently locked */
+#define TPM2_PT_VENDOR_VAR_TPMID_NV         ((TPM2_PT) (TPM2_PT_VENDOR_VAR + 7)) /* Bytes 1-2: Indicates whether configuration is enabled. Bytes 3-4: Indicates whether feature is permanently locked */
 /* NOTE: The following values are reserved:
  * 0x00000015 is reserved for the next 2nd TPM2_PT_PCR_POLICY set.
  * 0x00000016 is reserved for the next 2nd TPM2_PT_PCR_AUTH set.
