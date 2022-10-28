@@ -4146,9 +4146,13 @@ ifapi_capability_get(FAPI_CONTEXT *context, TPM2_CAP capability,
                                 context->cmd.GetInfo.property_count);
             break;
         case TPM2_CAP_VENDOR_PROPERTY:
+#if 0
             ADD_CAPABILITY_INFO(intelPttProperty, property,,
                                 TPM2_MAX_PTT_PROPERTIES,
                                 context->cmd.GetInfo.property_count);
+#else
+            // to-do
+#endif
             break;
         default:
             LOG_ERROR("Unsupported capability: 0x%x\n", capability);

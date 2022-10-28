@@ -64,6 +64,8 @@
 
 /* Vendor Specific Defines */
 #define TPM2_MAX_PTT_PROPERTIES (TPM2_MAX_CAP_BUFFER / sizeof(UINT32))
+#define TPM2_MAX_IFX_PROPERTIES ((TPM2_MAX_CAP_BUFFER - sizeof(TPM2_CAP) - \
+                                  sizeof(UINT32)) / sizeof(TPMS_TAGGED_PROPERTY))
 
 /* Attached Component Capabilities */
 #define TPM2_MAX_AC_CAPABILITIES (TPM2_MAX_CAP_BUFFER / sizeof(TPMS_AC_OUTPUT))
@@ -1196,6 +1198,13 @@ struct TPML_INTEL_PTT_PROPERTY {
     UINT32 property[TPM2_MAX_PTT_PROPERTIES]; /* property value */
 };
 
+/* Implementation specific structure to hold Infineon specific property data. */
+typedef struct TPML_TAGGED_IFX_PROPERTY TPML_TAGGED_IFX_PROPERTY;
+struct TPML_TAGGED_IFX_PROPERTY {
+    UINT32 count; /* number of properties. A value of zero is allowed. */
+    TPMS_TAGGED_PROPERTY ifxProperty[TPM2_MAX_IFX_PROPERTIES]; /* an array of tagged properties */
+};
+
 /* Definition of TPMU_CAPABILITIES Union <OUT> */
 typedef union TPMU_CAPABILITIES TPMU_CAPABILITIES;
 union TPMU_CAPABILITIES {
@@ -1211,6 +1220,7 @@ union TPMU_CAPABILITIES {
     TPML_TAGGED_POLICY authPolicies;
     TPML_ACT_DATA actData;
     TPML_INTEL_PTT_PROPERTY intelPttProperty;
+    TPML_TAGGED_IFX_PROPERTY ifxProperties;
 };
 
 /* Definition of TPMS_CAPABILITY_DATA Structure <OUT> */
