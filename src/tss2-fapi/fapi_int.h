@@ -145,6 +145,13 @@ enum IFAPI_CLEANUP_STATE {
     CLEANUP_SRK
 };
 
+/** The states for the FAPI's reading nv public*/
+enum IFAPI_READ_NV_PUBLIC_STATE {
+    READ_NV_PUBLIC_INIT = 0,
+    READ_NV_PUBLIC_GET_ESYS_TR,
+    READ_NV_PUBLIC_GET_PUBLIC
+};
+
 #define IFAPI_MAX_CAP_INFO 17
 
 typedef struct {
@@ -578,6 +585,7 @@ enum IFAPI_STATE_POLICY {
     POLICY_READ_FINISH,
     POLICY_INSTANTIATE_PREPARE,
     POLICY_INSTANTIATE,
+    POLICY_EXECUTE_PREPARE,
     POLICY_EXECUTE,
     POLICY_FLUSH
 };
@@ -632,6 +640,14 @@ typedef struct {
     size_t numPaths;                /**< Number of all objects in data store */
     char *current_path;
 } IFAPI_FILE_SEARCH_CTX;
+
+/** The states for the FAPI's prepare key loading */
+enum _FAPI_STATE_PREPARE_LOAD_KEY {
+    PREPARE_LOAD_KEY_INIT = 0,
+    PREPARE_LOAD_KEY_WAIT_FOR_SESSION,
+    PREPARE_LOAD_KEY_INIT_KEY,
+    PREPARE_LOAD_KEY_WAIT_FOR_KEY
+};
 
 /** The states for the FAPI's key loading */
 enum _FAPI_STATE_LOAD_KEY {
@@ -691,6 +707,7 @@ typedef struct {
  */
 typedef struct {
     enum _FAPI_STATE_LOAD_KEY state;   /**< The current state of key  loading */
+    enum  _FAPI_STATE_PREPARE_LOAD_KEY prepare_state;
     NODE_STR_T *path_list;        /**< The current used hierarchy for CreatePrimary */
     NODE_OBJECT_T *key_list;
     IFAPI_OBJECT auth_object;
@@ -700,6 +717,7 @@ typedef struct {
     bool parent_handle_persistent;
     IFAPI_OBJECT *key_object;
     char *key_path;
+    char const *path;
 } IFAPI_LoadKey;
 
 /** The data structure holding internal state of entity delete.
@@ -831,6 +849,8 @@ enum _FAPI_STATE {
     PROVISION_READ_CERT,
     PROVISION_PREPARE_READ_ROOT_CERT,
     PROVISION_READ_ROOT_CERT,
+    PROVISION_PREPARE_READ_INT_CERT,
+    PROVISION_READ_INT_CERT,
     PROVISION_INIT,
     PROVISION_INIT_SRK,
     PROVISION_WAIT_FOR_EK_SESSION,
@@ -877,6 +897,8 @@ enum _FAPI_STATE {
     PROVISION_PREPARE_GET_CAP_AUTH_STATE,
     PROVISION_SRK_GET_PERSISTENT_NAME,
     PROVISION_CHECK_SRK_EVICT_CONTROL,
+    PROVISION_AUTHORIZE_HS_FOR_EK_EVICT,
+    PROVISION_PREPARE_EK_EVICT,
 
     KEY_CREATE,
     KEY_CREATE_PRIMARY,
@@ -1137,6 +1159,7 @@ struct FAPI_CONTEXT {
     enum IFAPI_GET_CERT_STATE get_cert_state;
     enum _FAPI_FLUSH_STATE flush_object_state;  /**< The current state of a flush operation */
     enum IFAPI_CLEANUP_STATE cleanup_state;     /**< The state of cleanup after command execution */
+    enum IFAPI_READ_NV_PUBLIC_STATE read_nv_public_state;
     IFAPI_CONFIG config;             /**< The profile independent configuration data */
     UINT32 nv_buffer_max;            /**< The maximal size for transfer of nv buffer content */
     IFAPI_CMD_STATE cmd;             /**< The state information of the currently executed

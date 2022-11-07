@@ -444,8 +444,10 @@ ifapi_json_TPMS_POLICYNV_deserialize(json_object *jso,  TPMS_POLICYNV *out)
     if (!ifapi_get_sub_object(jso, "nvPublic", &jso2)) {
         memset(&out->nvPublic, 0, sizeof(TPM2B_NV_PUBLIC));
     } else {
-        r = ifapi_json_TPM2B_NV_PUBLIC_deserialize(jso2, &out->nvPublic);
+        TPM2B_NV_PUBLIC tmp = { 0 };
+        r = ifapi_json_TPM2B_NV_PUBLIC_deserialize(jso2, &tmp);
         return_if_error(r, "Bad value for field \"nvPublic\".");
+        out->nvPublic = tmp.nvPublic;
     }
 
     if (!ifapi_get_sub_object(jso, "operandB", &jso2)) {
@@ -782,13 +784,15 @@ ifapi_json_TPMS_POLICYDUPLICATIONSELECT_deserialize(json_object *jso,
         else
             out->includeObject = TPM2_NO;
     }
-    GET_OPTIONAL(newParentPublic, "newParentPublic", TPM2B_PUBLIC);
-    if (out->newParentPublic.size)
-        cond_cnt++;
+    GET_CONDITIONAL_TPM2B(newParentPublic, "newParentPublic", TPM2B_PUBLIC, TPMT_PUBLIC,
+                          publicArea, cond_cnt);
 
     if (!ifapi_get_sub_object(jso, "newParentPath", &jso2)) {
-        if (!out->newParentPublic.publicArea.type) {
-            return_error(TSS2_FAPI_RC_BAD_VALUE, "No path and TPM2B_PUBLIC");
+        if (!out->newParentPublic.type) {
+            if (!out->newParentName.size) {
+                return_error(TSS2_FAPI_RC_BAD_VALUE,
+                             "No path, new parent public, or new parent name ");
+            }
         }
         out->newParentPath = NULL;
     } else {
@@ -1042,8 +1046,10 @@ ifapi_json_TPMS_POLICYTEMPLATE_deserialize(json_object *jso,
         memset(&out->templatePublic, 0, sizeof(TPM2B_PUBLIC));
     } else {
         cond_cnt++;
-        r = ifapi_json_TPM2B_PUBLIC_deserialize(jso2, &out->templatePublic);
+        r = ifapi_json_TPMT_PUBLIC_deserialize(jso2, &out->templatePublic.publicArea);
         return_if_error(r, "Bad value for field \"templatePublic\".");
+
+        out->templatePublic.size = 0;
     }
 
     if (ifapi_get_sub_object(jso, "templateName", &jso2)) {
@@ -1106,13 +1112,9 @@ ifapi_json_TPMS_POLICYAUTHORIZENV_deserialize(json_object *jso,
         out->nvPath = NULL;
     }
 
-    if (!ifapi_get_sub_object(jso, "nvPublic", &jso2)) {
-        memset(&out->nvPublic, 0, sizeof(TPM2B_NV_PUBLIC));
-    } else {
-        cond_cnt++;
-        r = ifapi_json_TPM2B_NV_PUBLIC_deserialize(jso2, &out->nvPublic);
-        return_if_error(r, "Bad value for field \"nvPublic\".");
-    }
+    GET_CONDITIONAL_TPM2B(nvPublic, "nvPublic", TPM2B_NV_PUBLIC, TPMS_NV_PUBLIC,
+                          nvPublic, cond_cnt);
+
     /* Check whether only one condition field found in policy. */
     if (cond_cnt != 1) {
         return_error(TSS2_FAPI_RC_BAD_VALUE,
@@ -1380,17 +1382,21 @@ ifapi_json_TPMS_POLICYAUTHORIZATION_deserialize(json_object *jso,
         r = ifapi_json_char_deserialize(jso2, &out->keyPEM);
         return_if_error(r, "Bad value for field \"key\".");
         if (ifapi_get_sub_object(jso, "keyPEMhashAlg", &jso2)) {
-            r = ifapi_json_TPMI_ALG_HASH_deserialize(jso2, &out->keyPEMhashAlg);
+            /* Allow value not defined in spec to achieve backward compatibility. */
+            r = ifapi_json_TPMI_ALG_HASH_deserialize(jso2, &out->hashAlg);
             return_if_error(r, "Bad value for field \"keyPEMhashAlg\".");
+        } else if (ifapi_get_sub_object(jso, "hashAlg", &jso2)) {
+            r = ifapi_json_TPMI_ALG_HASH_deserialize(jso2, &out->hashAlg);
+            return_if_error(r, "Bad value for field \"hashAlg\".");
         } else {
-            out->keyPEMhashAlg = TPM2_ALG_SHA256;
+            out->hashAlg = TPM2_ALG_SHA256;
         }
         if (ifapi_get_sub_object(jso, "rsaScheme", &jso2)) {
             r = ifapi_json_TPMT_RSA_SCHEME_deserialize(jso2, &out->rsaScheme);
             return_if_error(r, "Bad value for field \"rsaScheme\".");
         } else {
             out->rsaScheme.scheme = TPM2_ALG_RSAPSS;
-            out->rsaScheme.details.rsapss.hashAlg = out->keyPEMhashAlg;
+            out->rsaScheme.details.rsapss.hashAlg = out->hashAlg;
         }
         if (!ifapi_get_sub_object(jso, "signature", &jso2)) {
             LOG_ERROR("Field \"signature\" not found.");

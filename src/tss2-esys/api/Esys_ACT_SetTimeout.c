@@ -73,9 +73,8 @@ Esys_ACT_SetTimeout(
 {
     TSS2_RC r;
 
-    r = Esys_ACT_SetTimeout_Async(esysContext, actHandle,
-                                  shandle1, shandle2, shandle3,
-                                  startTimeout);
+    r = Esys_ACT_SetTimeout_Async(esysContext, actHandle, shandle1, shandle2,
+                                  shandle3, startTimeout);
     return_if_error(r, "Error in async function");
 
     /* Set the timeout to indefinite for now, since we want _Finish to block */

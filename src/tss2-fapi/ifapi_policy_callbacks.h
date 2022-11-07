@@ -11,12 +11,14 @@
 enum IFAPI_STATE_POL_CB_EXCECUTE {
     POL_CB_EXECUTE_INIT = 0,
     POL_CB_LOAD_KEY,
+    POL_CB_LOAD_KEY_FINISH,
     POL_CB_SEARCH_POLICY,
     POL_CB_EXECUTE_SUB_POLICY,
     POL_CB_NV_READ,
     POL_CB_READ_NV_POLICY,
     POL_CB_READ_OBJECT,
-    POL_CB_AUTHORIZE_OBJECT
+    POL_CB_AUTHORIZE_OBJECT,
+    POL_CB_AUTHORIZE_KEY
 };
 
 /** The context of the policy execution */
@@ -28,7 +30,12 @@ typedef struct {
     ESYS_TR key_handle;             /**< Handle of a used key */
     ESYS_TR nv_index;               /**< Index of nv object storing a policy */
     ESYS_TR auth_index;             /**< Index of authorization object */
+    ESYS_TR flush_handle;           /**< Handle which has to be flushed after policy execution */
     IFAPI_OBJECT auth_object;       /**< FAPI auth object needed for authorization */
+    IFAPI_LoadKey load_ctx_sav;
+    IFAPI_LoadKey load_ctx;
+    IFAPI_CreatePrimary create_primary_ctx_sav;
+    IFAPI_CreatePrimary create_primary_ctx;
     IFAPI_OBJECT *key_object_ptr;
     IFAPI_OBJECT *auth_object_ptr;
     IFAPI_NV_Cmds nv_cmd_state;
@@ -53,14 +60,15 @@ ifapi_get_object_name(
 TSS2_RC
 ifapi_get_nv_public(
     const char *path,
-    TPM2B_NV_PUBLIC *nv_public,
+    TPMI_RH_NV_INDEX nv_index,
+    TPMS_NV_PUBLIC *nv_public,
     void *context);
 
 TSS2_RC
 ifapi_read_pcr(
-    TPMS_PCR_SELECT *pcr_select,
-    TPML_PCR_SELECTION *pcr_selection,
-    TPML_PCRVALUES **pcr_values,
+    TSS2_POLICY_PCR_SELECTION *pcr_selection,
+    TPML_PCR_SELECTION *out_pcr_selection,
+    TPML_DIGEST *out_pcr_digests,
     void *ctx);
 
 TSS2_RC
@@ -73,7 +81,9 @@ ifapi_policyeval_cbauth(
 
 TSS2_RC
 ifapi_branch_selection(
-    TPML_POLICYBRANCHES *branches,
+    TSS2_OBJECT *auth_object,
+    const char *branch_names[8],
+    size_t branch_count,
     size_t *branch_idx,
     void *userdata);
 
@@ -99,7 +109,7 @@ ifapi_exec_auth_policy(
 
 TSS2_RC
 ifapi_exec_auth_nv_policy(
-    TPM2B_NV_PUBLIC *nv_public,
+    TPMS_NV_PUBLIC *nv_public,
     TPMI_ALG_HASH hash_alg,
     void *userdata);
 

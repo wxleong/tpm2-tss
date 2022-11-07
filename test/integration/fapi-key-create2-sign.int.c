@@ -25,9 +25,6 @@
 #define PASSWORD "abc"
 #define SIGN_TEMPLATE  "sign,noDa"
 #define DECRYPT_TEMPLATE  "restricted,decrypt,noDa"
-#ifndef FAPI_PROFILE
-#define FAPI_PROFILE "P_ECC"
-#endif /* FAPI_PROFILE */
 #define EVENT_SIZE 10
 
 static bool cb_called = false;
@@ -44,7 +41,7 @@ branch_callback(
     UNUSED(description);
     UNUSED(userData);
 
-    if (strcmp(objectPath, "P_ECC/HS/SRK/myDecryptKey1/myDecryptKey2/") != 0) {
+    if (strcmp(objectPath, FAPI_PROFILE "/HS/SRK/myDecryptKey1/myDecryptKey2/") != 0) {
         return_error(TSS2_FAPI_RC_BAD_VALUE, "Unexpected path");
     }
 
@@ -198,7 +195,7 @@ test_fapi_key_create_sign(FAPI_CONTEXT *context)
 
     char *json_policy = NULL;
 
-    if (strcmp("P_ECC", fapi_profile) != 0)
+    if (strncmp("P_ECC", fapi_profile, 5) != 0)
         sigscheme = "RSA_PSS";
 
     /* We need to reset the passwords again, in order to not brick physical TPMs */

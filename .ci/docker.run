@@ -25,7 +25,7 @@ if [ -z "$WITH_CRYPTO" ]; then
 fi
 
 if [ "$WITH_CRYPTO" != "ossl" ]; then
-    export CONFIGURE_OPTIONS="$CONFIGURE_OPTIONS --disable-fapi"
+    export CONFIGURE_OPTIONS="$CONFIGURE_OPTIONS --disable-fapi --disable-policy"
 fi
 
 ./bootstrap
@@ -55,12 +55,17 @@ echo "ls -la ../ $(ls -la ../)"
 make -j$(nproc)
 popd
 
+if [ "$WITH_CRYPTO" == "none" ]; then
+    echo "Exiting without running tests becuase crypto backend is none"
+    exit 0
+fi
+
 # build with all tests enabled
 mkdir ./build
 pushd ./build
 
-if [ "$CC" == "gcc" ]; then
-  export CONFIGURE_OPTIONS="$CONFIGURE_OPTIONS --enable-code-coverage";
+if [[ "$CC" == "gcc" && "$ENABLE_COVERAGE" == "true" ]]; then
+    export CONFIGURE_OPTIONS="$CONFIGURE_OPTIONS --enable-code-coverage";
 fi
 
 if [ ldconfig -p 2>/dev/null| grep libasan > /dev/null && ldconfig -p 2>/dev/null| grep libubsan > /dev/null ]; then
@@ -80,7 +85,7 @@ else
 fi
 
 if [ "$SCANBUILD" == "yes" ]; then
-  scan-build --status-bugs make -j distcheck
+  scan-build --status-bugs make -j
 elif [ "$CC" == "clang" ]; then
   make -j distcheck
 else

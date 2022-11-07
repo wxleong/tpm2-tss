@@ -24,9 +24,6 @@
 
 #define PASSWORD "abc"
 #define SIGN_TEMPLATE  "sign,noDa"
-#ifndef FAPI_PROFILE
-#define FAPI_PROFILE "P_ECC"
-#endif /* FAPI_PROFILE */
 
 json_object *
 get_json_hex_string(const uint8_t *buffer, size_t size)
@@ -118,7 +115,7 @@ test_fapi_key_create_sign(FAPI_CONTEXT *context)
     char           *description = NULL;
 
 
-    if (strcmp("P_ECC", fapi_profile) != 0)
+    if (strncmp("P_ECC", fapi_profile, 5) != 0)
         sigscheme = "RSA_PSS";
 
     /* We need to reset the passwords again, in order to not brick physical TPMs */

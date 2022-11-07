@@ -18,7 +18,6 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <dirent.h>
-#include <curl/curl.h>
 
 #include "tss2_mu.h"
 #include "fapi_util.h"
@@ -28,6 +27,7 @@
 #include "ifapi_json_serialize.h"
 #include "ifapi_json_deserialize.h"
 #include "tpm_json_deserialize.h"
+#include "ifapi_eventlog.h"
 #define LOGMODULE fapi
 #include "util/log.h"
 #include "util/aux_util.h"
@@ -71,6 +71,8 @@ ifapi_set_key_flags(const char *type, bool policy, IFAPI_KEY_TEMPLATE *template)
             template->system = TPM2_YES;
         } else if (strcasecmp(flag, "sign") == 0) {
             attributes |= TPMA_OBJECT_SIGN_ENCRYPT;
+        } else if (strcasecmp(flag, "user") == 0) {
+	    attributes |= TPMA_OBJECT_USERWITHAUTH;
         } else if (strcasecmp(flag, "decrypt") == 0) {
             attributes |= TPMA_OBJECT_DECRYPT;
         } else if (strcasecmp(flag, "restricted") == 0) {
@@ -934,7 +936,7 @@ set_name_hierarchy_object(IFAPI_OBJECT *object)
 {
     TPM2_HANDLE handle = 0;
     size_t offset = 0;
-    switch (object->handle) {
+    switch (object->public.handle) {
     case ESYS_TR_RH_NULL:
         handle = TPM2_RH_NULL;
         break;
@@ -978,7 +980,7 @@ ifapi_init_hierarchy_object(
     memset(hierarchy, 0, sizeof(IFAPI_OBJECT));
     hierarchy->system = TPM2_YES;
     hierarchy->objectType = IFAPI_HIERARCHY_OBJ;
-    hierarchy->handle = esys_handle;
+    hierarchy->public.handle = esys_handle;
     hierarchy->misc.hierarchy.esysHandle = esys_handle;
     set_name_hierarchy_object(hierarchy);
 }
@@ -1012,16 +1014,16 @@ ifapi_set_name_hierarchy_object(IFAPI_OBJECT *object)
             }
         }
         if (strcmp(&path[pos], "HS") == 0) {
-            object->handle = ESYS_TR_RH_OWNER;
+            object->public.handle = ESYS_TR_RH_OWNER;
             object->misc.hierarchy.esysHandle = ESYS_TR_RH_OWNER;
         } else if (strcmp(&path[pos], "HE") == 0) {
-            object->handle = ESYS_TR_RH_ENDORSEMENT;
+            object->public.handle = ESYS_TR_RH_ENDORSEMENT;
             object->misc.hierarchy.esysHandle = ESYS_TR_RH_ENDORSEMENT;
         } else if (strcmp(&path[pos], "LOCKOUT") == 0) {
-            object->handle = ESYS_TR_RH_LOCKOUT;
+            object->public.handle = ESYS_TR_RH_LOCKOUT;
             object->misc.hierarchy.esysHandle = ESYS_TR_RH_LOCKOUT;
         } else  if (strcmp(&path[pos], "HN") == 0) {
-            object->handle = ESYS_TR_RH_NULL;
+            object->public.handle = ESYS_TR_RH_NULL;
             object->misc.hierarchy.esysHandle = ESYS_TR_RH_NULL;
         }
     }
@@ -1527,7 +1529,7 @@ ifapi_get_name(TPMT_PUBLIC *publicInfo, TPM2B_NAME *name)
  * @retval TSS2_SYS_RC_* for SAPI errors.
  */
 TSS2_RC
-ifapi_nv_get_name(TPM2B_NV_PUBLIC *publicInfo, TPM2B_NAME *name)
+ifapi_nv_get_name(TPMS_NV_PUBLIC *publicInfo, TPM2B_NAME *name)
 {
     BYTE buffer[sizeof(TPMS_NV_PUBLIC)];
     size_t offset = 0;
@@ -1535,18 +1537,18 @@ ifapi_nv_get_name(TPM2B_NV_PUBLIC *publicInfo, TPM2B_NAME *name)
     size_t len_alg_id = sizeof(TPMI_ALG_HASH);
     IFAPI_CRYPTO_CONTEXT_BLOB *cryptoContext;
 
-    if (publicInfo->nvPublic.nameAlg == TPM2_ALG_NULL) {
+    if (publicInfo->nameAlg == TPM2_ALG_NULL) {
         name->size = 0;
         return TSS2_RC_SUCCESS;
     }
     TSS2_RC r;
 
     /* Initialize the hash computation with the nameAlg. */
-    r = ifapi_crypto_hash_start(&cryptoContext, publicInfo->nvPublic.nameAlg);
+    r = ifapi_crypto_hash_start(&cryptoContext, publicInfo->nameAlg);
     return_if_error(r, "Crypto hash start");
 
     /* Get the marshaled data of the public area. */
-    r = Tss2_MU_TPMS_NV_PUBLIC_Marshal(&publicInfo->nvPublic,
+    r = Tss2_MU_TPMS_NV_PUBLIC_Marshal(publicInfo,
                                        &buffer[0], sizeof(TPMS_NV_PUBLIC),
                                        &offset);
     if (r) {
@@ -1573,7 +1575,7 @@ ifapi_nv_get_name(TPM2B_NV_PUBLIC *publicInfo, TPM2B_NAME *name)
 
     offset = 0;
     /* Store the nameAlg in the result. */
-    r = Tss2_MU_TPMI_ALG_HASH_Marshal(publicInfo->nvPublic.nameAlg,
+    r = Tss2_MU_TPMI_ALG_HASH_Marshal(publicInfo->nameAlg,
                                       &name->name[0], sizeof(TPMI_ALG_HASH),
                                       &offset);
     return_if_error(r, "Marshaling TPMI_ALG_HASH");
@@ -1610,7 +1612,7 @@ ifapi_object_cmp_name(IFAPI_OBJECT *object, void *name, bool *equal)
         obj_name = &object->misc.key.name;
         break;
     case IFAPI_NV_OBJ:
-        r = ifapi_nv_get_name(&object->misc.nv.public, &nv_name);
+        r = ifapi_nv_get_name(&object->misc.nv.public.nvPublic, &nv_name);
         return_if_error(r, "Get NV name.");
 
         obj_name = &nv_name;
@@ -2012,18 +2014,27 @@ ifapi_extend_vpcr(
     const IFAPI_EVENT *event)
 {
     TSS2_RC r;
-    size_t i;
+    size_t i, j;
     size_t event_size, size;
     IFAPI_CRYPTO_CONTEXT_BLOB *cryptoContext;
+    bool zero_digest = false;
 
     LOGBLOB_TRACE(&vpcr->buffer[0], vpcr->size, "Old vpcr value");
-
     for (i = 0; i < event->digests.count; i++) {
         if (event->digests.digests[i].hashAlg == bank) {
             event_size = ifapi_hash_get_digest_size(event->digests.digests[i].hashAlg);
 
             LOGBLOB_TRACE(&event->digests.digests[i].digest.sha512[0], event_size,
                           "Extending with");
+
+            zero_digest = true;
+            for (j = 0; j < event_size; j++) {
+                if (event->digests.digests[i].digest.sha512[j]) {
+                    zero_digest = false;
+                }
+            }
+            if (zero_digest)
+                continue;
 
             r = ifapi_crypto_hash_start(&cryptoContext, bank);
             return_if_error(r, "crypto hash start");
@@ -2037,7 +2048,7 @@ ifapi_extend_vpcr(
             break;
         }
     }
-    if (i == event->digests.count) {
+    if (event->digests.count > 0 && i == event->digests.count && !zero_digest) {
         LOG_ERROR("No digest for bank %"PRIu16" found in event", bank);
         return TSS2_FAPI_RC_BAD_VALUE;
     }
@@ -2049,6 +2060,47 @@ error_cleanup:
     ifapi_crypto_hash_abort(&cryptoContext);
     return r;
 }
+
+/** Compute new PCR value from PCR value and event digest.
+ *
+ * @param[in] alg The hash algorithm used for the PCR register.
+ * @param[in,out] pcr The old and the new PCR value.
+ * @param[in] digest The digest used for PCR extension.
+ * @retval TSS2_FAPI_RC_BAD_VALUE if the bank was not found in the event list.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an error occurs in the crypto library
+ * @retval TSS2_FAPI_RC_BAD_REFERENCE a invalid null pointer is passed.
+ * @retval TSS2_FAPI_RC_MEMORY if not enough memory can be allocated.
+ */
+TSS2_RC
+ifapi_extend_pcr(
+    TPMI_ALG_HASH alg,
+    uint8_t *pcr,
+    const uint8_t *digest,
+    size_t alg_size)
+{
+    TSS2_RC r;
+    IFAPI_CRYPTO_CONTEXT_BLOB *cryptoContext;
+
+    LOGBLOB_TRACE(pcr, alg_size, "Old pcr value");
+    LOGBLOB_TRACE(digest, alg_size, "Extend with");
+
+    r = ifapi_crypto_hash_start(&cryptoContext, alg);
+    return_if_error(r, "crypto hash start");
+
+    HASH_UPDATE_BUFFER(cryptoContext, pcr, alg_size, r, error_cleanup);
+    HASH_UPDATE_BUFFER(cryptoContext, digest, alg_size, r, error_cleanup);
+    r = ifapi_crypto_hash_finish(&cryptoContext, pcr, &alg_size);
+    return_if_error(r, "crypto hash finish");
+
+    LOGBLOB_TRACE(pcr, alg_size, "New vpcr value");
+
+    return TSS2_RC_SUCCESS;
+
+error_cleanup:
+    ifapi_crypto_hash_abort(&cryptoContext);
+    return r;
+}
+
 
 /** Check whether a event list corresponds to a certain quote information.
  *
@@ -2135,11 +2187,13 @@ ifapi_calculate_pcr_digest(
         n_events = json_object_array_length(jso_event_list);
         for (i_evt = 0; i_evt < n_events; i_evt++) {
             jso = json_object_array_get_idx(jso_event_list, i_evt);
-            r = ifapi_json_IFAPI_EVENT_deserialize(jso, &event);
+            r = ifapi_json_IFAPI_EVENT_deserialize(jso, &event, DIGEST_CHECK_WARNING);
             goto_if_error(r, "Error serialize policy", error_cleanup);
+            LOG_TRACE("Deserialized Event for PCR %u", event.pcr);
 
             for (i = 0; i < n_pcrs; i++) {
                 if (pcrs[i].pcr == event.pcr) {
+                    LOG_DEBUG("Extend PCR %uz", pcrs[i].pcr);
                     r = ifapi_extend_vpcr(&pcrs[i].value, pcrs[i].bank, &event);
                     goto_if_error2(r, "Extending vpcr %"PRIu32, error_cleanup, pcrs[i].pcr);
                 }
@@ -2457,147 +2511,6 @@ ifapi_cmp_public_key(
     }
 }
 
-struct CurlBufferStruct {
-  unsigned char *buffer;
-  size_t size;
-};
-
-/** Callback for copying received curl data to a buffer.
- *
- * The buffer will be reallocated according to the size of retrieved data.
- *
- * @param[in]  contents The retrieved content.
- * @param[in]  size the block size in the content.
- * @param[in]  nmemb The number of blocks.
- * @retval realsize The byte size of the data.
- */
-static size_t
-write_curl_buffer_cb(void *contents, size_t size, size_t nmemb, void *userp)
-{
-    size_t realsize = size * nmemb;
-    struct CurlBufferStruct *curl_buf = (struct CurlBufferStruct *)userp;
-
-    unsigned char *tmp_ptr = realloc(curl_buf->buffer, curl_buf->size + realsize + 1);
-    if (tmp_ptr == NULL) {
-        LOG_ERROR("Can't allocate memory in CURL callback.");
-        return 0;
-    }
-    curl_buf->buffer = tmp_ptr;
-    memcpy(&(curl_buf->buffer[curl_buf->size]), contents, realsize);
-    curl_buf->size += realsize;
-    curl_buf->buffer[curl_buf->size] = 0;
-
-    return realsize;
-}
-
-/** Get byte buffer from file system or web via curl.
- *
- * @param[in]  url The url of the resource.
- * @param[out] buffer The buffer retrieved via the url.
- * @param[out] buffer_size The size of the retrieved object.
- *
- * @retval 0 if buffer could be retrieved.
- * @retval -1 if an error did occur
- */
-int
-ifapi_get_curl_buffer(unsigned char * url, unsigned char ** buffer,
-                          size_t *buffer_size) {
-    int ret = -1;
-    struct CurlBufferStruct curl_buffer = { .size = 0, .buffer = NULL };
-#ifdef CURLU_ALLOW_SPACE
-    CURLU *urlp = NULL;
-#endif
-
-    CURLcode rc = curl_global_init(CURL_GLOBAL_DEFAULT);
-    if (rc != CURLE_OK) {
-        LOG_ERROR("curl_global_init failed: %s", curl_easy_strerror(rc));
-        goto out_memory;
-    }
-
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        LOG_ERROR("curl_easy_init failed");
-        goto out_global_cleanup;
-    }
-
-#ifdef CURLU_ALLOW_SPACE
-    urlp = curl_url();
-    if (!urlp) {
-        LOG_ERROR("curl_url failed.");
-        goto out_easy_cleanup;
-    }
-    CURLUcode url_rc;
-    url_rc = curl_url_set(urlp, CURLUPART_URL, (const char *)url, CURLU_ALLOW_SPACE | CURLU_URLENCODE);
-    if (url_rc) {
-        LOG_ERROR("curl_url_set for CURUPART_URL failed: %s",
-                  curl_url_strerror(url_rc));
-        goto out_easy_cleanup;
-    }
-    rc = curl_easy_setopt(curl, CURLOPT_CURLU, urlp);
-#else
-    rc = curl_easy_setopt(curl, CURLOPT_URL, url);
-#endif
-
-    if (rc != CURLE_OK) {
-        LOG_ERROR("curl_easy_setopt for CURLOPT_URL failed: %s",
-                curl_easy_strerror(rc));
-        goto out_easy_cleanup;
-    }
-
-    rc = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
-                          write_curl_buffer_cb);
-    if (rc != CURLE_OK) {
-        LOG_ERROR("curl_easy_setopt for CURLOPT_URL failed: %s",
-                curl_easy_strerror(rc));
-        goto out_easy_cleanup;
-    }
-
-    rc = curl_easy_setopt(curl, CURLOPT_WRITEDATA,
-                          (void *)&curl_buffer);
-    if (rc != CURLE_OK) {
-        LOG_ERROR("curl_easy_setopt for CURLOPT_URL failed: %s",
-                curl_easy_strerror(rc));
-        goto out_easy_cleanup;
-    }
-
-    rc = curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-    if (rc != CURLE_OK) {
-        LOG_ERROR("curl_easy_setopt for CURLOPT_FOLLOWLOCATION failed: %s",
-                  curl_easy_strerror(rc));
-        goto out_easy_cleanup;
-    }
-
-    if (LOGMODULE_status == LOGLEVEL_TRACE) {
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L)) {
-            LOG_WARNING("Curl easy setopt verbose failed");
-        }
-    }
-
-    rc = curl_easy_perform(curl);
-    if (rc != CURLE_OK) {
-        LOG_ERROR("curl_easy_perform() failed: %s", curl_easy_strerror(rc));
-        goto out_easy_cleanup;
-    }
-
-    *buffer = curl_buffer.buffer;
-    *buffer_size = curl_buffer.size;
-
-    ret = 0;
-
-out_easy_cleanup:
-#ifdef CURLU_ALLOW_SPACE
-    if (urlp)
-        curl_url_cleanup(urlp);
-#endif
-    if (ret != 0)
-        free(curl_buffer.buffer);
-    curl_easy_cleanup(curl);
-out_global_cleanup:
-    curl_global_cleanup();
-out_memory:
-    return ret;
-}
-
 /** Check valid keys of a json object.
  *
  * @param[in]  jso The json object.
@@ -2632,5 +2545,62 @@ ifapi_check_json_object_fields(
                 LOG_WARNING("Invalid field: %s", key);
             }
         }
+    }
+}
+
+TSS2_RC ifapi_pcr_selection_to_pcrvalues(
+        TPML_PCR_SELECTION *pcr_selection,
+        TPML_DIGEST *pcr_digests,
+        TPML_PCRVALUES **out) {
+
+    /* Count pcrs */
+    UINT32 i = 0, pcr = 0, n_pcrs = 0, i_pcr = 0;
+    for (i = 0; i < pcr_selection->count; i++) {
+        for (pcr = 0; pcr < TPM2_MAX_PCRS; pcr++) {
+            uint8_t byte_idx = pcr / 8;
+            uint8_t flag = 1 << (pcr % 8);
+            /* Check whether PCR is used. */
+            if (flag & pcr_selection->pcrSelections[i].pcrSelect[byte_idx])
+                n_pcrs += 1;
+        }
+    }
+
+
+    TPML_PCRVALUES *pcr_values = calloc(1, sizeof(TPML_PCRVALUES) + n_pcrs* sizeof(TPMS_PCRVALUE));
+    return_if_null(pcr_values, "Out of memory.", TSS2_FAPI_RC_MEMORY);
+    /* Initialize digest list with pcr values from TPM */
+    i_pcr = 0;
+    pcr_values->count = pcr_digests->count;
+    for (i = 0; i < pcr_selection->count; i++) {
+        for (pcr = 0; pcr < TPM2_MAX_PCRS; pcr++) {
+            uint8_t byte_idx = pcr / 8;
+            uint8_t flag = 1 << (pcr % 8);
+            /* Check whether PCR is used. */
+            if (flag & pcr_selection->pcrSelections[i].pcrSelect[byte_idx]) {
+                pcr_values->pcrs[i_pcr].pcr = pcr;
+                pcr_values->pcrs[i_pcr].hashAlg = pcr_selection->pcrSelections[i].hash;
+                memcpy(&pcr_values->pcrs[i_pcr].digest,
+                       &pcr_digests->digests[i_pcr].buffer[0],
+                       pcr_digests->digests[i_pcr].size);
+                i_pcr += 1;
+            }
+        }
+    }
+
+    *out = pcr_values;
+
+    return TSS2_RC_SUCCESS;
+}
+
+void ifapi_helper_init_policy_pcr_selections (TSS2_POLICY_PCR_SELECTION *s,
+        TPMT_POLICYELEMENT *pol_element)
+{
+    if (pol_element->element.PolicyPCR.currentPCRs.sizeofSelect > 0) {
+        s->type = TSS2_POLICY_PCR_SELECTOR_PCR_SELECT;
+        s->selections.pcr_select = pol_element->element.PolicyPCR.currentPCRs;
+    } else {
+        s->type = TSS2_POLICY_PCR_SELECTOR_PCR_SELECTION;
+        s->selections.pcr_selection =
+                pol_element->element.PolicyPCR.currentPCRandBanks;
     }
 }

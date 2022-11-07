@@ -9,7 +9,7 @@
 INCLUDE_DIRS    = -I$(srcdir)/src -I$(srcdir)/include/tss2
 ACLOCAL_AMFLAGS = -I m4 --install
 AM_CFLAGS       = $(INCLUDE_DIRS) $(EXTRA_CFLAGS) $(CODE_COVERAGE_CFLAGS) \
-				  $(SANITIZER_CFLAGS) -DINTERNALBUILD=1
+				  $(SANITIZER_CFLAGS)
 AM_LDFLAGS      = $(EXTRA_LDFLAGS) $(CODE_COVERAGE_LIBS) $(SANITIZER_LDFLAGS)
 
 # Initialize empty variables to be extended throughout
@@ -207,7 +207,8 @@ EXTRA_DIST += \
     LICENSE \
     MAINTAINERS \
     README.md \
-    RELEASE.md
+    RELEASE.md \
+    VERSION
 
 # Windows code / core build files
 EXTRA_DIST += \
@@ -292,7 +293,6 @@ libtss2_tcti_device = src/tss2-tcti/libtss2-tcti-device.la
 tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_device.h
 lib_LTLIBRARIES += $(libtss2_tcti_device)
 pkgconfig_DATA += lib/tss2-tcti-device.pc
-EXTRA_DIST += lib/tss2-tcti-device.map
 
 if HAVE_LD_VERSION_SCRIPT
 src_tss2_tcti_libtss2_tcti_device_la_LDFLAGS  = -Wl,--version-script=$(srcdir)/lib/tss2-tcti-device.map
@@ -302,6 +302,7 @@ src_tss2_tcti_libtss2_tcti_device_la_SOURCES  = \
     src/tss2-tcti/tcti-common.c \
     src/tss2-tcti/tcti-device.c
 endif # ENABLE_TCTI_DEVICE
+EXTRA_DIST += lib/tss2-tcti-device.map
 
 # tcti library for swtpm
 if ENABLE_TCTI_SWTPM
@@ -309,7 +310,6 @@ libtss2_tcti_swtpm = src/tss2-tcti/libtss2-tcti-swtpm.la
 tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_swtpm.h
 lib_LTLIBRARIES += $(libtss2_tcti_swtpm)
 pkgconfig_DATA += lib/tss2-tcti-swtpm.pc
-EXTRA_DIST += lib/tss2-tcti-swtpm.map lib/tss2-tcti-swtpm.def src/tss2-tcti/tss2-tcti-swtpm.vcxproj
 
 if HAVE_LD_VERSION_SCRIPT
 src_tss2_tcti_libtss2_tcti_swtpm_la_LDFLAGS  = -Wl,--version-script=$(srcdir)/lib/tss2-tcti-swtpm.map
@@ -320,6 +320,7 @@ src_tss2_tcti_libtss2_tcti_swtpm_la_SOURCES  = \
     src/tss2-tcti/tcti-swtpm.c \
     src/tss2-tcti/tcti-swtpm.h
 endif # ENABLE_TCTI_SWTPM
+EXTRA_DIST += lib/tss2-tcti-swtpm.map lib/tss2-tcti-swtpm.def src/tss2-tcti/tss2-tcti-swtpm.vcxproj
 
 # tcti library for Microsoft TPM2 simulator
 if ENABLE_TCTI_MSSIM
@@ -327,9 +328,6 @@ libtss2_tcti_mssim = src/tss2-tcti/libtss2-tcti-mssim.la
 tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_mssim.h
 lib_LTLIBRARIES += $(libtss2_tcti_mssim)
 pkgconfig_DATA += lib/tss2-tcti-mssim.pc
-EXTRA_DIST += lib/tss2-tcti-mssim.map \
-              lib/tss2-tcti-mssim.def \
-              src/tss2-tcti/tss2-tcti-mssim.vcxproj
 
 if HAVE_LD_VERSION_SCRIPT
 src_tss2_tcti_libtss2_tcti_mssim_la_LDFLAGS  = -Wl,--version-script=$(srcdir)/lib/tss2-tcti-mssim.map
@@ -339,6 +337,9 @@ src_tss2_tcti_libtss2_tcti_mssim_la_SOURCES  = \
     src/tss2-tcti/tcti-common.c \
     src/tss2-tcti/tcti-mssim.c
 endif # ENABLE_TCTI_MSSIM
+EXTRA_DIST += lib/tss2-tcti-mssim.map \
+              lib/tss2-tcti-mssim.def \
+              src/tss2-tcti/tss2-tcti-mssim.vcxproj
 
 # tcti pcap library
 if ENABLE_TCTI_PCAP
@@ -346,7 +347,6 @@ libtss2_tcti_pcap = src/tss2-tcti/libtss2-tcti-pcap.la
 tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_pcap.h
 lib_LTLIBRARIES += $(libtss2_tcti_pcap)
 pkgconfig_DATA += lib/tss2-tcti-pcap.pc
-EXTRA_DIST += lib/tss2-tcti-pcap.map
 
 if HAVE_LD_VERSION_SCRIPT
 src_tss2_tcti_libtss2_tcti_pcap_la_LDFLAGS  = -Wl,--version-script=$(srcdir)/lib/tss2-tcti-pcap.map
@@ -357,6 +357,7 @@ src_tss2_tcti_libtss2_tcti_pcap_la_SOURCES  = \
     src/tss2-tcti/tcti-pcap-builder.c \
     src/tss2-tcti/tcti-pcap.c
 endif # ENABLE_TCTI_PCAP
+EXTRA_DIST += lib/tss2-tcti-pcap.map
 
 # tcti libtpms library
 if ENABLE_TCTI_LIBTPMS
@@ -364,17 +365,17 @@ libtss2_tcti_libtpms = src/tss2-tcti/libtss2-tcti-libtpms.la
 tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_libtpms.h
 lib_LTLIBRARIES += $(libtss2_tcti_libtpms)
 pkgconfig_DATA += lib/tss2-tcti-libtpms.pc
-EXTRA_DIST += lib/tss2-tcti-libtpms.map
 
 if HAVE_LD_VERSION_SCRIPT
 src_tss2_tcti_libtss2_tcti_libtpms_la_LDFLAGS  = -Wl,--version-script=$(srcdir)/lib/tss2-tcti-libtpms.map
 endif # HAVE_LD_VERSION_SCRIPT
-src_tss2_tcti_libtss2_tcti_libtpms_la_LIBADD   = $(libtss2_tctildr) $(libutil)
+src_tss2_tcti_libtss2_tcti_libtpms_la_LIBADD   = $(libtss2_mu) $(libutil)
 src_tss2_tcti_libtss2_tcti_libtpms_la_SOURCES  = \
     src/tss2-tcti/tcti-common.c \
     src/tss2-tcti/tcti-libtpms.c \
     src/tss2-tcti/tcti-libtpms.h
 endif # ENABLE_TCTI_LIBTPMS
+EXTRA_DIST += lib/tss2-tcti-libtpms.map
 
 # tcti library for sub-process commands
 if ENABLE_TCTI_CMD
@@ -382,8 +383,6 @@ libtss2_tcti_cmd = src/tss2-tcti/libtss2-tcti-cmd.la
 tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_cmd.h
 lib_LTLIBRARIES += $(libtss2_tcti_cmd)
 pkgconfig_DATA += lib/tss2-tcti-cmd.pc
-EXTRA_DIST += lib/tss2-tcti-cmd.map \
-              lib/tss2-tcti-cmd.def
 
 if HAVE_LD_VERSION_SCRIPT
 if !UNIT
@@ -396,6 +395,29 @@ src_tss2_tcti_libtss2_tcti_cmd_la_SOURCES  = \
     src/tss2-tcti/tcti-cmd.c \
     src/tss2-tcti/tcti-cmd.h
 endif # ENABLE_TCTI_CMD
+EXTRA_DIST += lib/tss2-tcti-cmd.map \
+              lib/tss2-tcti-cmd.def
+
+# tcti library for spi connected tpms
+if ENABLE_TCTI_SPI_HELPER
+libtss2_tcti_spi_helper = src/tss2-tcti/libtss2-tcti-spi-helper.la
+tss2_HEADERS += $(srcdir)/include/tss2/tss2_tcti_spi_helper.h
+lib_LTLIBRARIES += $(libtss2_tcti_spi_helper)
+pkgconfig_DATA += lib/tss2-tcti-spi-helper.pc
+EXTRA_DIST += lib/tss2-tcti-spi-helper.map \
+              lib/tss2-tcti-spi-helper.def
+
+if HAVE_LD_VERSION_SCRIPT
+if !UNIT
+src_tss2_tcti_libtss2_tcti_spi_helper_la_LDFLAGS  = -Wl,--version-script=$(srcdir)/lib/tss2-tcti-spi-helper.map
+endif # UNIT
+endif # HAVE_LD_VERSION_SCRIPT
+src_tss2_tcti_libtss2_tcti_spi_helper_la_LIBADD   = $(libutil) $(libtss2_mu)
+src_tss2_tcti_libtss2_tcti_spi_helper_la_SOURCES  = \
+    src/tss2-tcti/tcti-common.c \
+    src/tss2-tcti/tcti-spi-helper.c \
+    src/tss2-tcti/tcti-spi-helper.h
+endif # ENABLE_TCTI_SPI_HELPER
 
 ### TCG TSS SYS spec library ###
 libtss2_sys = src/tss2-sys/libtss2-sys.la
@@ -414,8 +436,9 @@ endif # HAVE_LD_VERSION_SCRIPT
 # breaking the backwards compatibility of Tss2_Sys_ReadClock call.
 src_tss2_sys_libtss2_sys_la_LDFLAGS += -version-info 1:0:0
 
-src_tss2_sys_libtss2_sys_la_LIBADD = $(libtss2_mu) $(libutil)
-src_tss2_sys_libtss2_sys_la_SOURCES = $(TSS2_SYS_SRC)
+src_tss2_sys_libtss2_sys_la_LIBADD = $(libtss2_mu)
+src_tss2_sys_libtss2_sys_la_SOURCES = $(TSS2_SYS_SRC) \
+	src/util/log.c
 EXTRA_DIST += lib/tss2-sys.map lib/tss2-sys.def src/tss2-sys/tss2-sys.vcxproj
 
 ### TCG TSS ESYS spec library ###
@@ -468,22 +491,53 @@ src_tss2_rc_libtss2_rc_la_LDFLAGS = -Wl,--version-script=$(srcdir)/lib/tss2-rc.m
 endif # HAVE_LD_VERSION_SCRIPT
 src_tss2_rc_libtss2_rc_la_SOURCES = $(TSS2_RC_SRC)
 
+### TSS Policy library ###
+if POLICY
+libtss2_policy = src/tss2-policy/libtss2-policy.la
+tss2_HEADERS += $(srcdir)/include/tss2/tss2_policy.h
+lib_LTLIBRARIES += $(libtss2_policy)
+pkgconfig_DATA += lib/tss2-policy.pc
+
+src_tss2_policy_libtss2_policy_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/tss2-policy -I$(srcdir)/src/tss2-fapi \
+    $(JSONC_CFLAGS)
+src_tss2_policy_libtss2_policy_la_LIBADD  = $(libtss2_esys) $(libtss2_mu) $(libutil) $(JSONC_LIBS) $(UUID_LIBS)
+
+if HAVE_LD_VERSION_SCRIPT
+src_tss2_policy_libtss2_policy_la_LDFLAGS = -Wl,--version-script=$(srcdir)/lib/tss2-policy.map
+endif # HAVE_LD_VERSION_SCRIPT
+
+src_tss2_policy_libtss2_policy_la_SOURCES = $(TSS2_POLICY_SRC) \
+    src/tss2-fapi/fapi_crypto.c \
+    src/tss2-fapi/ifapi_eventlog.c \
+    src/tss2-fapi/ifapi_ima_eventlog.c \
+    src/tss2-fapi/ifapi_eventlog_system.c \
+    src/tss2-fapi/ifapi_helpers.c \
+    src/tss2-fapi/ifapi_io.c \
+    src/tss2-fapi/ifapi_json_deserialize.c \
+    src/tss2-fapi/ifapi_json_serialize.c \
+    src/tss2-fapi/tpm_json_deserialize.c \
+    src/tss2-fapi/tpm_json_serialize.c \
+    src/tss2-fapi/ifapi_json_eventlog_serialize.c \
+    src/tss2-fapi/ifapi_policy.c \
+    src/tss2-fapi/ifapi_policy_calculate.c \
+    src/tss2-fapi/ifapi_policy_execute.c \
+    src/tss2-fapi/ifapi_policy_instantiate.c  \
+    src/tss2-fapi/ifapi_policy_json_deserialize.c \
+    src/tss2-fapi/ifapi_policy_json_serialize.c \
+    src/tss2-fapi/ifapi_keystore.c \
+    src/tss2-fapi/ifapi_policy_store.c
+
+EXTRA_DIST += lib/tss2-policy.map lib/tss2-policy.def
+endif
 
 ### TCG TSS FAPI spec library ###
 if FAPI
 fapiconfdir = @sysconfdir@/tpm2-tss
 fapiconf_DATA = fapi-config.json
 
-EXTRA_DIST += dist/fapi-config.json.in
 CLEANFILES += fapi-config.json \
               man/man5/fapi-config.5 \
               man/man5/fapi-profile.5
-
-EXTRA_DIST += man/fapi-config.5.in \
-              man/fapi-profile.5.in \
-              man/man-postlude-fapi.troff \
-              doc/fapi-config.md \
-              doc/fapi-profile.md
 
 # We have to do this ourselves, in order to get absolute paths
 fapi-config.json: dist/fapi-config.json.in
@@ -496,12 +550,13 @@ fapi-config.json: dist/fapi-config.json.in
 		-e 's|[@]localstatedir@|$(localstatedir)|g' \
 		-e 's|[@]runstatedir@|$(runstatedir)|g' \
 		-e 's|[@]userstatedir@|$(userstatedir)|g' \
+		-e 's|[@]imameasurements@|$(imameasurements)|g' \
+		-e 's|[@]sysmeasurements@|$(sysmeasurements)|g' \
 		< "$<" > "$@"
 
 sysusers_DATA = dist/sysusers.d/tpm2-tss.conf
 tmpfiles_DATA = tpm2-tss-fapi.conf
 
-EXTRA_DIST += dist/sysusers.d/tpm2-tss.conf dist/tmpfiles.d/tpm2-tss-fapi.conf.in
 CLEANFILES += tpm2-tss-fapi.conf
 
 # We have to do this ourselves, in order to get absolute paths
@@ -510,9 +565,6 @@ tpm2-tss-fapi.conf: dist/tmpfiles.d/tpm2-tss-fapi.conf.in
 		-e 's|[@]localstatedir@|$(localstatedir)|g' \
 		-e 's|[@]runstatedir@|$(runstatedir)|g' \
 		< "$<" > "$@"
-
-EXTRA_DIST += dist/fapi-profiles/P_RSA2048SHA256.json \
-              dist/fapi-profiles/P_ECCP256SHA256.json
 
 fapiprofilesdir = @sysconfdir@/tpm2-tss/fapi-profiles
 fapiprofiles_DATA = dist/fapi-profiles/P_RSA2048SHA256.json \
@@ -523,8 +575,18 @@ tss2_HEADERS += $(srcdir)/include/tss2/tss2_fapi.h
 lib_LTLIBRARIES += $(libtss2_fapi)
 pkgconfig_DATA += lib/tss2-fapi.pc
 EXTRA_DIST +=  \
+    dist/fapi-config.json.in \
+    dist/fapi-profiles/P_RSA2048SHA256.json \
+    dist/fapi-profiles/P_ECCP256SHA256.json \
+    dist/sysusers.d/tpm2-tss.conf \
+    dist/tmpfiles.d/tpm2-tss-fapi.conf.in \
+    doc/fapi-config.md \
+    doc/fapi-profile.md \
     lib/tss2-fapi.map \
     lib/tss2-fapi.def \
+    man/fapi-config.5.in \
+    man/fapi-profile.5.in \
+    man/man-postlude-fapi.troff \
     test/data/fapi/P_RSA_EK_persistent.json \
     test/data/fapi/P_RSA.json \
     test/data/fapi/P_RSA2.json \
@@ -534,6 +596,8 @@ EXTRA_DIST +=  \
     test/data/fapi/P_RSA_sh_policy.json \
     test/data/fapi/P_RSA256.json \
     test/data/fapi/P_ECC.json \
+    test/data/fapi/P_ECC384.json \
+    test/data/fapi/P_ECC_system.json \
     test/data/fapi/policy/pol_pcr16_0.json \
     test/data/fapi/policy/pol_pcr16_0_rsa_authorized.json \
     test/data/fapi/policy/pol_pcr16_0_ecc_authorized.json \
@@ -541,6 +605,7 @@ EXTRA_DIST +=  \
     test/data/fapi/policy/pol_pcr16_0_or.json \
     test/data/fapi/policy/pol_pcr8_0.json \
     test/data/fapi/policy/pol_nv.json \
+    test/data/fapi/policy/pol_nv_tpm_idx.json \
     test/data/fapi/policy/pol_nv_counter.json \
     test/data/fapi/policy/pol_nv_written.json \
     test/data/fapi/policy/pol_signed.json \
@@ -550,7 +615,10 @@ EXTRA_DIST +=  \
     test/data/fapi/policy/pol_authorize_ecc_pem.json \
     test/data/fapi/policy/pol_authorize_outer.json \
     test/data/fapi/policy/pol_authorize_nv.json \
+    test/data/fapi/policy/pol_authorize_nv_tpms.json \
+    test/data/fapi/policy/pol_authorize_nv_complex_tpm2b.json \
     test/data/fapi/policy/pol_secret.json \
+    test/data/fapi/policy/pol_secret_key.json \
     test/data/fapi/policy/pol_password.json \
     test/data/fapi/policy/pol_auth_value.json \
     test/data/fapi/policy/pol_command_code.json \
@@ -563,14 +631,36 @@ EXTRA_DIST +=  \
     test/data/fapi/policy/pol_pcr16_read.json \
     test/data/fapi/policy/pol_action.json \
     test/data/fapi/policy/pol_cphash.json \
-    test/data/fapi/policy/pol_or_read_write_secret.json
+    test/data/fapi/policy/pol_or_read_write_secret.json \
+    test/data/fapi/policy/pol_ek_high_range_sha256.json \
+    test/data/fapi/P_ECC_sh_eh_policy_sha384.json \
+    test/data/fapi/policy/pol_authorize_ecc_pem_sha384.json \
+    test/data/fapi/policy/pol_authorize_nv_complex_tpm2b_sha384.json \
+    test/data/fapi/policy/pol_authorize_nv_tpms_sha384.json \
+    test/data/fapi/policy/pol_authorize_nv_sha384.json \
+    test/data/fapi/policy/pol_cphash_sha384.json \
+    test/data/fapi/policy/pol_pcr16_0_ecc_authorized_sha384.json \
+    test/data/fapi/eventlog/binary_measurements_nuc.b64 \
+    test/data/fapi/eventlog/binary_measurements_pc_client.b64 \
+    test/data/fapi/eventlog/event.b64 \
+    test/data/fapi/eventlog/event-uefiaction.b64 \
+    test/data/fapi/eventlog/event-uefiservices.b64 \
+    test/data/fapi/eventlog/event-uefivar.b64 \
+    test/data/fapi/eventlog/specid-vendordata.b64 \
+    test/data/fapi/eventlog/sml-ima-ng-sha1.b64 \
+    test/data/fapi/eventlog/sml-ima-sha1.b64 \
+    test/data/fapi/eventlog/sml-ima-sig-sha256.b64 \
+    test/data/fapi/eventlog/sml-ima-ng-sha1-invalidated.b64 \
+    test/data/fapi/eventlog/sml-ima-ng-sha1-invalidated.b64 \
+    test/data/fapi/eventlog/sml-ima-sig-sha256-invalidated.b64 \
+    test/data/fapi/eventlog/sml-ima-sha1-invalidated.b64
 
 src_tss2_fapi_libtss2_fapi_la_LIBADD  = $(libtss2_sys) $(libtss2_mu) $(libtss2_esys) \
     $(libutil) $(libtss2_tctildr)
 
 src_tss2_fapi_libtss2_fapi_la_SOURCES = $(TSS2_FAPI_SRC)
 src_tss2_fapi_libtss2_fapi_la_CFLAGS  = $(AM_CFLAGS) -I$(srcdir)/src/tss2-fapi $(CRYPTO_CFLAGS) $(JSONC_CFLAGS) $(CURL_CFLAGS)
-src_tss2_fapi_libtss2_fapi_la_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LIBS) $(JSONC_LIBS) $(CURL_LIBS)
+src_tss2_fapi_libtss2_fapi_la_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LIBS) $(JSONC_LIBS) $(CURL_LIBS) $(UUID_LIBS)
 if HAVE_LD_VERSION_SCRIPT
 src_tss2_fapi_libtss2_fapi_la_LDFLAGS += -Wl,--version-script=$(srcdir)/lib/tss2-fapi.map
 endif # HAVE_LD_VERSION_SCRIPT
@@ -636,20 +726,22 @@ define make_parent_dir
 endef
 
 define make_tss_user_and_group
-    if type -p groupadd > /dev/null; then \
-        id -g tss 2>/dev/null || groupadd --system tss; \
-    else \
-        id -g tss 2>/dev/null || \
-        addgroup --system tss; \
-    fi && \
-    if type -p useradd > /dev/null; then \
-        id -u tss 2>/dev/null || \
-        useradd --system --home-dir / --shell `type -p nologin` \
-                         --no-create-home -g tss tss; \
-    else \
-        id -u tss 2>/dev/null || \
-        adduser --system --home / --shell `type -p nologin` \
-                --no-create-home --ingroup tss tss; \
+    if test -z "${DESTDIR}"; then \
+        if type -p groupadd > /dev/null; then \
+            id -g tss 2>/dev/null || groupadd --system tss; \
+        else \
+            id -g tss 2>/dev/null || \
+            addgroup --system tss; \
+        fi && \
+        if type -p useradd > /dev/null; then \
+            id -u tss 2>/dev/null || \
+            useradd --system --home-dir / --shell `type -p nologin` \
+                             --no-create-home -g tss tss; \
+        else \
+            id -u tss 2>/dev/null || \
+            adduser --system --home / --shell `type -p nologin` \
+                    --no-create-home --ingroup tss tss; \
+        fi; \
     fi
 endef
 
@@ -669,8 +761,10 @@ define make_fapi_dirs
 endef
 
 define set_fapi_permissions
-    ($(call set_tss_permissions,$(DESTDIR)$(runstatedir)/tpm2-tss))
-    ($(call set_tss_permissions,$(DESTDIR)$(localstatedir)/lib/tpm2-tss))
+    if test -z "${DESTDIR}"; then \ e
+        ($(call set_tss_permissions,$(DESTDIR)$(runstatedir)/tpm2-tss)) && \
+        ($(call set_tss_permissions,$(DESTDIR)$(localstatedir)/lib/tpm2-tss)) \
+    fi
 endef
 
 define check_dir
@@ -678,8 +772,10 @@ define check_dir
 endef
 
 define check_fapi_dirs
-    ($(call check_dir,$(DESTDIR)$(runstatedir)/tpm2-tss/eventlog/))
-    ($(call check_dir,$(DESTDIR)$(localstatedir)/lib/tpm2-tss/system/keystore/))
+    if test -z "${DESTDIR}"; then \
+        ($(call check_dir,$(DESTDIR)$(runstatedir)/tpm2-tss/eventlog/)) && \
+        ($(call check_dir,$(DESTDIR)$(localstatedir)/lib/tpm2-tss/system/keystore/)) \
+    fi;
 endef
 
 ### Man Pages
@@ -727,21 +823,23 @@ EXTRA_DIST += dist/tpm-udev.rules
 install-dirs:
 if HOSTOS_LINUX
 if SYSD_SYSUSERS
-	@echo "systemd-sysusers $(DESTDIR)$(sysconfdir)/sysusers.d/tpm2-tss.conf"
-	@systemd-sysusers $(DESTDIR)$(sysconfdir)/sysusers.d/tpm2-tss.conf || echo "WARNING Failed to create the tss user and group"
+	@test -n "$(DESTDIR)" || echo "systemd-sysusers $(sysusersdir)/tpm2-tss.conf"
+	@test -n "$(DESTDIR)" || ( systemd-sysusers $(sysusersdir)/tpm2-tss.conf || echo "WARNING Failed to create the tss user and group" )
 else
 	@echo "call make_tss_user_and_group"
 	@$(call make_tss_user_and_group) || echo "WARNING Failed to create the tss user and group"
 endif
 if SYSD_TMPFILES
-	@echo "systemd-tmpfiles --create $(DESTDIR)$(sysconfdir)/tmpfiles.d/tpm2-tss-fapi.conf"
-	@systemd-tmpfiles --create $(DESTDIR)$(sysconfdir)/tmpfiles.d/tpm2-tss-fapi.conf|| echo "WARNING Failed to create the FAPI directories with the correct permissions"
+	@test -n "$(DESTDIR)" || echo "systemd-tmpfiles --create $(tmpfilesdir)/tpm2-tss-fapi.conf"
+	@test -n "$(DESTDIR)" || ( systemd-tmpfiles --create $(tmpfilesdir)/tpm2-tss-fapi.conf|| echo "WARNING Failed to create the FAPI directories with the correct permissions" )
+	@test -z "$(DESTDIR)" || echo "(call make_fapi_dirs)"
+	@test -z "$(DESTDIR)" || $(call make_fapi_dirs)
 else
 	@echo "(call make_fapi_dirs) && (call set_fapi_permissions)"
 	@-$(call make_fapi_dirs) && $(call set_fapi_permissions) || echo "WARNING Failed to create the FAPI directories with the correct permissions"
 endif
-	@echo "call check_fapi_dirs"
-	@$(call check_fapi_dirs)
+	@test -n "$(DESTDIR)" || echo "call check_fapi_dirs"
+	@test -n "$(DESTDIR)" || $(call check_fapi_dirs)
 endif
 
 install-data-hook: install-dirs

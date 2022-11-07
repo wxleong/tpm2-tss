@@ -7,6 +7,7 @@
 #define ESYS_INT_H
 
 #include <stdint.h>
+#include "esys_crypto.h"
 #include "esys_types.h"
 
 #ifdef __cplusplus
@@ -79,14 +80,14 @@ typedef struct {
 } EvictControl_IN;
 
 typedef struct {
-    TPM2B_AUTH *auth;
     TPM2B_AUTH authData;
 } HMAC_Start_IN;
 
+typedef HMAC_Start_IN MAC_Start_IN;
+
 typedef struct {
     ESYS_TR authHandle;
-    TPM2B_AUTH *newAuth;
-    TPM2B_AUTH newAuthData;
+    TPM2B_AUTH newAuth;
 } HierarchyChangeAuth_IN;
 
 typedef struct {
@@ -99,7 +100,6 @@ typedef struct {
 
 typedef struct {
     ESYS_TR nvIndex;
-    TPM2B_AUTH *auth;
     TPM2B_AUTH authData;
     TPM2B_NV_PUBLIC *publicInfo;
     TPM2B_NV_PUBLIC publicInfoData;
@@ -108,6 +108,11 @@ typedef struct {
 typedef struct {
     ESYS_TR flushHandle;
 } FlushContext_IN;
+
+typedef struct {
+    ESYS_TR pcrHandle;
+    TPM2B_AUTH authData;
+} PCR_IN;
 
 /** Union for input parameters.
  *
@@ -125,11 +130,13 @@ typedef union {
     CreateLoaded_IN CreateLoaded;
     EvictControl_IN EvictControl;
     HMAC_Start_IN HMAC_Start;
+    MAC_Start_IN MAC_Start;
     HierarchyChangeAuth_IN HierarchyChangeAuth;
     SequenceComplete_IN SequenceComplete;
     Policy_IN Policy;
     NV_IN NV;
     FlushContext_IN FlushContext;
+    PCR_IN PCR;
 } IESYS_CMD_IN_PARAM;
 
 /** The states for the ESAPI's internal state machine */
@@ -182,6 +189,14 @@ struct ESYS_CONTEXT {
                                       automatically loaded. */
     IESYS_SESSION *enc_session;  /**< Ptr to the enc param session.
                                       Used to restore session attributes */
+    ESYS_TR sav_session1;        /**< Used to store session for cases where call
+                                      with ESYS_TR_NONE is needed to determine object
+                                      name */
+    ESYS_TR sav_session2;
+    ESYS_TR sav_session3;
+
+    ESYS_CRYPTO_CALLBACKS crypto_backend; /**< The backend function pointers to use
+                                              for crypto operations */
 };
 
 /** The number of authomatic resubmissions.

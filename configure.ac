@@ -4,7 +4,7 @@
 # All rights reserved.
 
 AC_INIT([tpm2-tss],
-        [m4_esyscmd_s([git describe --tags --always --dirty])],
+        [m4_esyscmd_s([cat ./VERSION])],
         [https://github.com/tpm2-software/tpm2-tss/issues],
         [],
         [https://github.com/tpm2-software/tpm2-tss])
@@ -15,7 +15,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])]) #Backward compatible setti
 
 AC_CONFIG_HEADERS([config.h])
 
-AC_CONFIG_FILES([Makefile Doxyfile lib/tss2-sys.pc lib/tss2-esys.pc lib/tss2-mu.pc lib/tss2-tcti-device.pc lib/tss2-tcti-mssim.pc lib/tss2-tcti-swtpm.pc lib/tss2-tcti-libtpms.pc lib/tss2-tcti-pcap.pc lib/tss2-rc.pc lib/tss2-tctildr.pc lib/tss2-fapi.pc lib/tss2-tcti-cmd.pc])
+AC_CONFIG_FILES([Makefile Doxyfile lib/tss2-sys.pc lib/tss2-esys.pc lib/tss2-mu.pc lib/tss2-tcti-device.pc lib/tss2-tcti-mssim.pc lib/tss2-tcti-swtpm.pc lib/tss2-tcti-pcap.pc lib/tss2-tcti-libtpms.pc lib/tss2-rc.pc lib/tss2-tctildr.pc lib/tss2-fapi.pc lib/tss2-tcti-cmd.pc lib/tss2-policy.pc lib/tss2-tcti-spi-helper.pc])
 
 # propagate configure arguments to distcheck
 AC_SUBST([DISTCHECK_CONFIGURE_FLAGS],[$ac_configure_args])
@@ -54,6 +54,31 @@ AC_SUBST([LIBSOCKET_LDFLAGS])
 AC_SUBST([HOSTOS])
 
 AM_CONDITIONAL(HOSTOS_LINUX, [test x"$HOSTOS" = xLinux])
+
+IMA_MEASUREMENTS="/sys/kernel/security/ima/binary_runtime_measurements"
+
+AS_IF([ test -e "$IMA_MEASUREMENTS"], [imameasurements_std="$IMA_MEASUREMENTS" ],
+      [imameasurements_std="/dev/null" ] )
+AC_SUBST(imameasurements_std)
+
+AC_ARG_WITH([imameasurements],
+            [AS_HELP_STRING([--with-imameasurements=<file>],
+                            [sets file with the IMA measurements")])],,
+            [with_imameasurements=$imameasurements_std])
+AC_SUBST(imameasurements, $with_imameasurements)
+
+SYSTEM_MEASUREMENTS="/sys/kernel/security/tpm0/binary_bios_measurements"
+
+AS_IF([test -e "$SYSTEM_MEASUREMENTS"], [sysmeasurements_std="$SYSTEM_MEASUREMENTS" ],
+      [sysmeasurements_std="/dev/null" ] )
+AC_SUBST(sysmeasurements_std)
+
+
+AC_ARG_WITH([sysmeasurements],
+            [AS_HELP_STRING([--with-sysmeasurements=<file>],
+                            [sets file with the binary bios measurements")])],,
+            [with_sysmeasurements=$sysmeasurements_std])
+AC_SUBST(sysmeasurements, $with_sysmeasurements)
 
 # runstatedir is only defined in the yet unreleased Autoconf 2.70
 AC_ARG_WITH([runstatedir],
@@ -115,6 +140,7 @@ AC_ARG_ENABLE([fapi],
 
 AM_CONDITIONAL(FAPI, test "x$enable_fapi" = "xyes")
 
+
 AC_ARG_ENABLE([fapi-async-tests],
     AS_HELP_STRING([--enable-fapi-async-tests],
                [Force fapi to spin asynchronously. (NOT FOR PRODUCTION!)]),,
@@ -124,8 +150,16 @@ AS_IF([test "x$enable_fapi_async_tests" = "xyes"],
 AS_IF([test "x$enable_fapi_async_tests" = "xyes"],
     [AC_MSG_WARN("FAPI compiled with asynchronous spinning testing. NOT FOR PRODUCTION!")])
 
+AC_ARG_ENABLE([policy],
+            [AS_HELP_STRING([--enable-policy],
+                            [build the tss2-policy library (default is yes)])],
+            [enable_policy=$enableval],
+            [enable_policy=yes])
+
+AM_CONDITIONAL(POLICY, test "x$enable_policy" = "xyes")
+
 AC_ARG_WITH([crypto],
-            [AS_HELP_STRING([--with-crypto={ossl,mbed}],
+            [AS_HELP_STRING([--with-crypto={ossl,mbed,none}],
                             [sets the ESYS crypto backend (default is OpenSSL)])],,
             [with_crypto=ossl])
 
@@ -150,6 +184,8 @@ AS_IF([test "x$enable_esys" = xyes],
            AC_DEFINE([MBED], [1], [mbedTLS cryptographic backend])
            TSS2_ESYS_CFLAGS_CRYPTO="$LIBMBED_CFLAGS"
            TSS2_ESYS_LDFLAGS_CRYPTO="-lmbedcrypto"
+       ], [test "x$with_crypto" = xnone], [
+           AC_MSG_NOTICE([No crypto backend selected! Users must set crypto functions!])
        ], [AC_MSG_ERROR([Bad value for --with-crypto $with_crypto])])])
 AC_SUBST([TSS2_ESYS_CFLAGS_CRYPTO])
 AC_SUBST([TSS2_ESYS_LDFLAGS_CRYPTO])
@@ -160,11 +196,17 @@ AS_IF([test "x$enable_fapi" != xno && test "x$enable_esys" = "xno"],
 AS_IF([test "x$enable_fapi" != xno && test "x$with_crypto" != "xossl"],
     [AC_MSG_ERROR([FAPI has to be compiled with OpenSSL])])
 
-AS_IF([test "x$enable_fapi" = xyes ],
+AS_IF([test "x$enable_policy" != xno && test "x$with_crypto" != "xossl"],
+    [AC_MSG_ERROR([libpolicy has to be compiled with OpenSSL])])
+
+AS_IF([test "x$enable_fapi" = xyes -o "x$enable_policy" = xyes ],
       [PKG_CHECK_MODULES([JSONC], [json-c])])
 
 AS_IF([test "x$enable_fapi" = xyes ],
       [PKG_CHECK_MODULES([CURL], [libcurl])])
+
+AS_IF([test "x$enable_fapi" = xyes -o "x$enable_policy" = xyes ],
+      [PKG_CHECK_MODULES([UUID], [uuid])])
 
 AC_ARG_WITH([tctidefaultmodule],
             [AS_HELP_STRING([--with-tctidefaultmodule],
@@ -228,6 +270,15 @@ AC_ARG_ENABLE([tcti-cmd],
 AM_CONDITIONAL([ENABLE_TCTI_CMD], [test "x$enable_tcti_cmd" != xno])
 AS_IF([test "x$enable_tcti_cmd" = "xyes"],
 	[AC_DEFINE([TCTI_CMD],[1], [TCTI FOR COMMAND BASED ACCESS TO TPM2 DEVICE])])
+
+AC_ARG_ENABLE([tcti-spi-helper],
+            [AS_HELP_STRING([--disable-tcti-spi-helper],
+                            [don't build the tcti-spi-helper module])],,
+            [enable_tcti_spi_helper=yes])
+
+AM_CONDITIONAL([ENABLE_TCTI_SPI_HELPER], [test "x$enable_tcti_spi_helper" != xno])
+AS_IF([test "x$enable_tcti_spi_helper" = "xyes"],
+	[AC_DEFINE([TCTI_SPI_HELPER],[1], [TCTI HELPER FOR SPI BASED ACCESS TO TPM2 DEVICE])])
 
 AC_ARG_ENABLE([tcti-fuzzing],
             [AS_HELP_STRING([--enable-tcti-fuzzing],
@@ -489,7 +540,7 @@ AC_CHECK_PROG(systemd_tmpfiles, systemd-tmpfiles, yes)
 AM_CONDITIONAL(SYSD_TMPFILES, test "x$systemd_tmpfiles" = "xyes")
 
 # Check all tools used by make install
-AS_IF([test "$HOSTOS" = "Linux"],
+AS_IF([test "$HOSTOS" = "Linux" && test "x$systemd_sysusers" != "xyes"],
     [ AC_CHECK_PROG(useradd, useradd, yes)
       AC_CHECK_PROG(groupadd, groupadd, yes)
       AC_CHECK_PROG(adduser, adduser, yes)
@@ -543,17 +594,25 @@ AM_COND_IF([ENABLE_TCTI_FUZZING], [
                     [AC_MSG_ERROR("Fuzzing TCTI can only be used with clang")])
             ], [])
 
+AC_ARG_WITH([default-test-fapi-profile],
+            [AS_HELP_STRING([--with-default-test-fapi-profile=PROFILE],
+                            [sets the default FAPI profile used in tests])],,
+            [with_default_test_fapi_profile=P_ECC])
+AC_DEFINE_UNQUOTED([DEFAULT_TEST_FAPI_PROFILE], ["$with_default_test_fapi_profile"], [Default FAPI profile used for testing])
+
 AC_OUTPUT
 
 AC_MSG_RESULT([
     $PACKAGE_NAME $VERSION
     esys:               $enable_esys
     fapi:               $enable_fapi
+    policy:             $enable_policy
     tctidefaultmodule:  $with_tctidefaultmodule
     tctidefaultconfig:  $with_tctidefaultconfig
     unit:               $enable_unit
     integration:        $enable_integration
     testing backend:    $integration_tcti
+    fapi test profile:  $with_default_test_fapi_profile
     fuzzing:            $with_fuzzing
     debug:              $enable_debug
     maxloglevel:        $with_maxloglevel
@@ -565,4 +624,6 @@ AC_MSG_RESULT([
     sysusersdir:        $sysusersdir
     tmpfilesdir:        $tmpfilesdir
     userstatedir:       [\$HOME/]$with_userstatedir
+    sysmeasurements:    $sysmeasurements
+    imameasurements:    $imameasurements
 ])

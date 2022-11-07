@@ -19,6 +19,7 @@
 #include "ifapi_json_deserialize.h"
 #include "tpm_json_deserialize.h"
 #include "ifapi_policy_callbacks.h"
+#include "ifapi_policyutil_execute.h"
 #define LOGMODULE fapi
 #include "util/log.h"
 #include "util/aux_util.h"
@@ -169,7 +170,7 @@ get_policy_digest_idx(TPML_DIGEST_VALUES *digest_values, TPMI_ALG_HASH hashAlg,
  *                policy command.
  * @param[in,out] policy The PCR policy which will be executed. The policy
  *                digest will be added to the policy.
- * @param[in]     current_hash_alg The hash algorithm wich will be used for
+ * @param[in]     current_hash_alg The hash algorithm which will be used for
  *                policy computation.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
@@ -183,7 +184,7 @@ get_policy_digest_idx(TPML_DIGEST_VALUES *digest_values, TPMI_ALG_HASH hashAlg,
  *         the function.
  * @retval TSS2_FAPI_RC_BAD_REFERENCE a invalid null pointer is passed.
  * @retval TSS2_FAPI_RC_MEMORY if not enough memory can be allocated.
- * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occured.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occurred.
  */
 static TSS2_RC
 execute_policy_pcr(
@@ -234,7 +235,7 @@ execute_policy_pcr(
  *                policy command.
  * @param[in,out] policy The duplicate policy which will be executed. The policy
  *                digest will be added to the policy.
- * @param[in]     current_hash_alg The hash algorithm wich will be used for
+ * @param[in]     current_hash_alg The hash algorithm which will be used for
  *                policy computation.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
@@ -258,7 +259,9 @@ execute_policy_duplicate(
 
     switch (current_policy->state) {
     statecase(current_policy->state, POLICY_EXECUTE_INIT)
-        ifapi_policyeval_EXEC_CB *cb = &current_policy->callbacks;
+        TSS2_POLICY_EXEC_CALLBACKS *cb = &current_policy->callbacks;
+        return_if_null(cb->cbdup, "Policy Duplicate Callback Not Set",
+            TSS2_FAPI_RC_NULL_CALLBACK);
         r = cb->cbdup(&policy->objectName, cb->cbdup_userdata);
         return_if_error(r, "Get name for policy duplicate select.");
 
@@ -296,7 +299,7 @@ execute_policy_duplicate(
  *                policy command.
  * @param[in,out] policy The NV policy which will be executed. The policy
  *                digest will be added to the policy.
- * @param[in]     current_hash_alg The hash algorithm wich will be used for
+ * @param[in]     current_hash_alg The hash algorithm which will be used for
  *                policy computation.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
@@ -310,14 +313,14 @@ execute_policy_duplicate(
  * @retval TSS2_FAPI_RC_MEMORY if not enough memory can be allocated.
  * @retval TSS2_FAPI_RC_BAD_VALUE if an invalid value was passed into
  *         the function.
- * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occured.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occurred.
  * @retval TSS2_FAPI_RC_PATH_NOT_FOUND if a FAPI object path was not found
  *         during authorization.
  * @retval TSS2_FAPI_RC_KEY_NOT_FOUND if a key was not found.
  * @retval TSS2_FAPI_RC_BAD_PATH if the path is used in inappropriate context
  *         or contains illegal characters.
  * @retval TSS2_FAPI_RC_NOT_PROVISIONED FAPI was not provisioned.
- * @retval TSS2_FAPI_RC_IO_ERROR if an error occured while accessing the
+ * @retval TSS2_FAPI_RC_IO_ERROR if an error occurred while accessing the
  *         object store.
  * @retval TSS2_FAPI_RC_AUTHORIZATION_UNKNOWN if a required authorization callback
  *         is not set.
@@ -342,9 +345,11 @@ execute_policy_nv(
         fallthrough;
 
     statecase(current_policy->state, POLICY_AUTH_CALLBACK)
-        ifapi_policyeval_EXEC_CB *cb = &current_policy->callbacks;
+        TSS2_POLICY_EXEC_CALLBACKS *cb = &current_policy->callbacks;
 
         /* Authorize NV object. */
+        return_if_null(cb->cbauth, "Policy Auth Callback Not Set",
+            TSS2_FAPI_RC_NULL_CALLBACK);
         r = cb->cbauth(&current_policy->name,
                        &current_policy->object_handle,
                        &current_policy->auth_handle,
@@ -386,7 +391,7 @@ execute_policy_nv(
  *                policy command.
  * @param[in,out] policy The policy to be signed which will be executed. The policy
  *                digest will be added to the policy.
- * @param[in]     current_hash_alg The hash algorithm wich will be used for
+ * @param[in]     current_hash_alg The hash algorithm which will be used for
  *                policy computation.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
@@ -402,7 +407,7 @@ execute_policy_nv(
  * @retval TSS2_ESYS_RC_* possible error codes of ESAPI.
  * @retval TSS2_FAPI_RC_BAD_VALUE if an invalid value was passed into
  *         the function.
- * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occured.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occurred.
  */
 static TSS2_RC
 execute_policy_signed(
@@ -412,7 +417,6 @@ execute_policy_signed(
 {
     TSS2_RC r = TSS2_RC_SUCCESS;
     size_t offset = 0;
-    //TPMT_SIGNATURE signature_tpm;
     size_t signature_size;
     const uint8_t *signature_ossl = NULL;
 
@@ -447,7 +451,7 @@ execute_policy_signed(
         fallthrough;
 
     statecase(current_policy->state, POLICY_EXECUTE_CALLBACK);
-        ifapi_policyeval_EXEC_CB *cb = &current_policy->callbacks;
+        TSS2_POLICY_EXEC_CALLBACKS *cb = &current_policy->callbacks;
         int pem_key_size;
         TPM2B_PUBLIC tpm_public;
 
@@ -461,6 +465,8 @@ execute_policy_signed(
         }
 
         /* Callback for signing the autorization hash. */
+        goto_if_null(cb->cbsign, "Policy Sign Callback Not Set",
+            TSS2_FAPI_RC_NOT_IMPLEMENTED, cleanup);
         r = cb->cbsign(current_policy->pem_key, policy->publicKeyHint,
                        policy->keyPEMhashAlg, current_policy->buffer,
                        current_policy->buffer_size,
@@ -542,7 +548,7 @@ cleanup:
  * The selected policy will be executed via a callback. For an example callback
  * implementation see ifapi_exec_auth_policy().
  *
- * For an example callback implementation to executie of an authorized policy
+ * For an example callback implementation to execute of an authorized policy
  * ifapi_exec_auth_policy()
  *
  * @param[in,out] *esys_ctx The ESAPI context which is needed to execute the
@@ -550,7 +556,7 @@ cleanup:
  * @param[in,out] policy The policy which defines the signing key and several
  *                additional parameters (nonce, policyRef ...). The policy
  *                digest will be added to the policy.
- * @param[in]     current_hash_alg The hash algorithm wich will be used for
+ * @param[in]     current_hash_alg The hash algorithm which will be used for
  *                policy computation.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
@@ -561,7 +567,7 @@ cleanup:
  *         this function needs to be called again.
  * @retval TSS2_FAPI_RC_BAD_SEQUENCE if the context has an asynchronous
  *         operation already pending.
- * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occured.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occurred.
  * @retval TSS2_FAPI_RC_BAD_REFERENCE a invalid null pointer is passed.
  * @retval TSS2_FAPI_RC_POLICY_UNKNOWN if policy search for a certain policy digest
  *         was not successful.
@@ -575,7 +581,7 @@ cleanup:
  * @retval TSS2_FAPI_RC_BAD_PATH if the path is used in inappropriate context
  *         or contains illegal characters.
  * @retval TSS2_FAPI_RC_NOT_PROVISIONED FAPI was not provisioned.
- * @retval TSS2_FAPI_RC_IO_ERROR if an error occured while accessing the
+ * @retval TSS2_FAPI_RC_IO_ERROR if an error occurred while accessing the
  *         object store.
  * @retval TSS2_FAPI_RC_AUTHORIZATION_FAILED if the authorization attempt fails.
  */
@@ -590,23 +596,27 @@ execute_policy_authorize(
     TPM2B_PUBLIC public2b;
     TPM2B_DIGEST aHash;
     IFAPI_CRYPTO_CONTEXT_BLOB *cryptoContext;
-    size_t hash_size;
     size_t size;
     TPMT_TK_VERIFIED *ticket;
     TPM2B_NAME *tmp_name = NULL;
 
     LOG_TRACE("call");
     public2b.size = 0;
+
+    size_t hash_size;
     if (!(hash_size = ifapi_hash_get_digest_size(hash_alg))) {
-        goto_error(r, TSS2_FAPI_RC_BAD_VALUE,
+        goto_error(r, TSS2_FAPI_RC_NULL_CALLBACK,
                    "Unsupported hash algorithm (%" PRIu16 ")", cleanup,
                    hash_alg);
     }
+
     switch (current_policy->state) {
     statecase(current_policy->state, POLICY_EXECUTE_INIT);
         current_policy->object_handle = ESYS_TR_NONE;
         /* Execute authorized policy. */
-        ifapi_policyeval_EXEC_CB *cb = &current_policy->callbacks;
+        TSS2_POLICY_EXEC_CALLBACKS *cb = &current_policy->callbacks;
+        goto_if_null(cb->cbauthpol, "Authorize Policy Callback Not Set",
+            TSS2_FAPI_RC_NOT_IMPLEMENTED, cleanup);
         r = cb->cbauthpol(&policy->keyPublic, hash_alg, &policy->approvedPolicy,
                           &policy->policyRef,
                           &policy->signature, cb->cbauthpol_userdata);
@@ -632,7 +642,8 @@ execute_policy_authorize(
         SAFE_FREE(tmp_name);
 
         /* Use policyRef and policy to compute authorization hash */
-        r = ifapi_crypto_hash_start(&cryptoContext, hash_alg);
+        r = ifapi_crypto_hash_start(&cryptoContext,
+                hash_alg);
         return_if_error(r, "crypto hash start");
 
         HASH_UPDATE_BUFFER(cryptoContext, &policy->approvedPolicy.buffer[0],
@@ -730,14 +741,14 @@ cleanup:
  *         was not successful.
  * @retval TSS2_ESYS_RC_* possible error codes of ESAPI.
  * @retval TSS2_FAPI_RC_MEMORY if not enough memory can be allocated.
- * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occured.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occurred.
  * @retval TSS2_FAPI_RC_PATH_NOT_FOUND if a FAPI object path was not found
  *         during authorization.
  * @retval TSS2_FAPI_RC_KEY_NOT_FOUND if a key was not found.
  * @retval TSS2_FAPI_RC_BAD_PATH if the path is used in inappropriate context
  *         or contains illegal characters.
  * @retval TSS2_FAPI_RC_NOT_PROVISIONED FAPI was not provisioned.
- * @retval TSS2_FAPI_RC_IO_ERROR if an error occured while accessing the
+ * @retval TSS2_FAPI_RC_IO_ERROR if an error occurred while accessing the
  *         object store.
  * @retval TSS2_FAPI_RC_AUTHORIZATION_UNKNOWN if a required authorization callback
  *         is not set.
@@ -751,7 +762,7 @@ execute_policy_authorize_nv(
     IFAPI_POLICY_EXEC_CTX *current_policy)
 {
     TSS2_RC r = TSS2_RC_SUCCESS;
-    ifapi_policyeval_EXEC_CB *cb;
+    TSS2_POLICY_EXEC_CALLBACKS *cb;
 
     LOG_DEBUG("call");
     cb = &current_policy->callbacks;
@@ -759,7 +770,9 @@ execute_policy_authorize_nv(
     switch (current_policy->state) {
     statecase(current_policy->state, POLICY_EXECUTE_INIT)
         /* Execute the policy stored in the NV object. */
-        r = cb->cbauthnv(&policy->nvPublic, hash_alg, cb->cbauthpol_userdata);
+        return_if_null(cb->cbauthnv, "Authorize NV Callback Not Set",
+                TSS2_FAPI_RC_NULL_CALLBACK);
+        r = cb->cbauthnv(&policy->nvPublic, hash_alg, cb->cbauthnv_userdata);
         try_again_or_error(r, "Execute policy authorize nv callback.");
 
         r = ifapi_nv_get_name(&policy->nvPublic, &current_policy->name);
@@ -768,6 +781,8 @@ execute_policy_authorize_nv(
 
     statecase(current_policy->state, POLICY_AUTH_CALLBACK)
         /* Authorize the NV object for policy execution. */
+        return_if_null(cb->cbauth, "Policy Auth Callback Not Set",
+                TSS2_FAPI_RC_NULL_CALLBACK);
         r = cb->cbauth(&current_policy->name,
                        &current_policy->object_handle,
                        &current_policy->auth_handle,
@@ -852,12 +867,15 @@ execute_policy_secret(
 
     switch (current_policy->state) {
     statecase(current_policy->state, POLICY_EXECUTE_INIT)
-        ifapi_policyeval_EXEC_CB *cb = &current_policy->callbacks;
+        TSS2_POLICY_EXEC_CALLBACKS *cb = &current_policy->callbacks;
         /* Callback for the object authorization. */
+        return_if_null(cb->cbauth, "Policy Auth Callback Not Set",
+            TSS2_FAPI_RC_NULL_CALLBACK);
+        current_policy->flush_handle = false;
         r = cb->cbauth(&policy->objectName,
                        &current_policy->object_handle,
                        &current_policy->auth_handle,
-                   &current_policy->auth_session, cb->cbauth_userdata);
+                       &current_policy->auth_session, cb->cbauth_userdata);
         return_try_again(r);
         goto_if_error(r, "Authorize object callback.", cleanup);
         fallthrough;
@@ -886,17 +904,30 @@ execute_policy_secret(
         r = Esys_PolicySecret_Finish(esys_ctx, NULL,
                                      NULL);
         return_try_again(r);
-        goto_if_error(r, "FAPI PolicyAuthorizeNV_Finish", error_cleanup);
+        goto_if_error(r, "FAPI PolicySecret_Finish", cleanup);
+        if (!current_policy->flush_handle) {
+            current_policy->state = POLICY_EXECUTE_INIT;
+            return r;
+        }
+        r = Esys_FlushContext_Async(esys_ctx, current_policy->auth_handle);
+        goto_if_error(r, "FlushContext_Async", cleanup);
+        fallthrough;
+
+    statecase(current_policy->state, POLICY_FLUSH_KEY);
+        r = Esys_FlushContext_Finish(esys_ctx);
+        try_again_or_error(r, "Flush key finish.");
         current_policy->state = POLICY_EXECUTE_INIT;
         break;
 
     statecasedefault(current_policy->state);
     }
 
-cleanup:
     return r;
 
- error_cleanup:
+ cleanup:
+    if (current_policy->flush_handle) {
+         Esys_FlushContext(esys_ctx, current_policy->auth_handle);
+    }
     SAFE_FREE(current_policy->nonceTPM);
     return r;
 }
@@ -905,10 +936,10 @@ cleanup:
  *
  * @param[in,out] *esys_ctx The ESAPI context which is needed to execute the
  *                policy command.
- * @param[in,out] policy The policy which defines the values for the comparision
- *                with the TPM timers and the comparision operation.
+ * @param[in,out] policy The policy which defines the values for the comparison
+ *                with the TPM timers and the comparison operation.
  *                The policy digest will be added to the policy.
- * @param[in]     current_hash_alg The hash algorithm wich will be used for
+ * @param[in]     current_hash_alg The hash algorithm which will be used for
  *                policy computation.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
@@ -1099,7 +1130,7 @@ execute_policy_password(
  *
  * @param[in,out] *esys_ctx The ESAPI context which is needed to execute the
  *                policy command.
- * @param[in,out] policy The policy with the command code used fo limitting.
+ * @param[in,out] policy The policy with the command code used for limiting.
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
  * @retval TSS2_RC_SUCCESS on success.
@@ -1421,8 +1452,10 @@ execute_policy_action(
 
     switch (current_policy->state) {
     statecase(current_policy->state, POLICY_EXECUTE_INIT);
-        ifapi_policyeval_EXEC_CB *cb = &current_policy->callbacks;
+        TSS2_POLICY_EXEC_CALLBACKS *cb = &current_policy->callbacks;
 
+        return_if_null(cb->cbaction, "Policy Action Callback Not Set",
+            TSS2_FAPI_RC_NULL_CALLBACK);
         /* Execute the callback and try it again if the callback is not finished. */
         r = cb->cbaction(policy->action, cb->cbaction_userdata);
         try_again_or_error(r, "Execute policy action callback.");
@@ -1442,7 +1475,7 @@ execute_policy_action(
  * @param[in,out] current_policy The policy context which stores the state
  *                of the policy execution.
  * @retval TSS2_RC_SUCCESS on success.
- * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occured.
+ * @retval TSS2_FAPI_RC_GENERAL_FAILURE if an internal error occurred.
  * @retval TSS2_FAPI_RC_TRY_AGAIN if an I/O operation is not finished yet and
  *         this function needs to be called again.
  * @retval TSS2_FAPI_RC_BAD_SEQUENCE if the context has an asynchronous
@@ -1457,7 +1490,7 @@ execute_policy_action(
  * @retval TSS2_FAPI_RC_BAD_VALUE if an invalid value was passed into
  *         the function.
  * @retval TSS2_FAPI_RC_NOT_PROVISIONED FAPI was not provisioned.
- * @retval TSS2_FAPI_RC_IO_ERROR if an error occured while accessing the
+ * @retval TSS2_FAPI_RC_IO_ERROR if an error occurred while accessing the
  *         object store.
  * @retval TSS2_FAPI_RC_AUTHORIZATION_UNKNOWN if a required authorization callback
  *         is not set.
@@ -1589,17 +1622,15 @@ execute_policy_element(
         return_error(TSS2_FAPI_RC_GENERAL_FAILURE,
                      "Policy not implemented");
         }
-    return r;
-error:
-    return r;
 
     /* All policies executed successfully */
+error:
     return r;
 }
 
 /** Compute execution order for policies based on branch selection.
  *
- * To simplify asynncronous policy executiion a linked list of the policy structures
+ * To simplify asynchronous policy execution a linked list of the policy structures
  * needed for execution based on the result of the  branch selection callbacks
  * is computed.
  * @retval TSS2_FAPI_RC_MEMORY if not enough memory can be allocated.
@@ -1616,14 +1647,34 @@ compute_policy_list(
     TSS2_RC r = TSS2_RC_SUCCESS;
     TPML_POLICYBRANCHES *branches;
     TPML_POLICYELEMENTS *or_elements;
-    size_t branch_idx, i;
+    size_t branch_idx, i, j;
+
+    IFAPI_OBJECT *auth_object = pol_ctx->auth_object;
 
     for (i = 0; i < elements->count; i++) {
         if (elements->elements[i].type == POLICYOR) {
             branches = elements->elements[i].element.PolicyOr.branches;
-            r = pol_ctx->callbacks.cbpolsel(branches, &branch_idx,
-                                            pol_ctx->callbacks.cbpolsel_userdata);
+
+            /* TPM policy or is restricted to 8 elements */
+            const char *branch_names[8] = { 0 };
+
+            for (j = 0; j < branches->count; j++)
+                branch_names[j] = branches->authorizations[j].name;
+
+            return_if_null(pol_ctx->callbacks.cbpolsel, "Policy Select Callback Not Set",
+                TSS2_FAPI_RC_NULL_CALLBACK);
+            r = pol_ctx->callbacks.cbpolsel(
+                    &auth_object->public,
+                    branch_names,
+                    branches->count,
+                    &branch_idx,
+                    pol_ctx->callbacks.cbpolsel_userdata);
             return_if_error(r, "Select policy branch.");
+
+            if (branch_idx >= branches->count) {
+                return_error2(TSS2_FAPI_RC_AUTHORIZATION_FAILED, "Invalid branch number.");
+            }
+
             or_elements = branches->authorizations[branch_idx].policy;
             r = compute_policy_list(pol_ctx, or_elements);
             return_if_error(r, "Compute policy digest list for policy or.");
@@ -1643,9 +1694,9 @@ compute_policy_list(
  *                execution.
  * @retval TSS2_RC_SUCCESS on success.
  * @retval TSS2_FAPI_RC_AUTHORIZATION_UNKNOWN If the callback for branch selection is
- *         not defined. This callback will be needed of or policies have to be
+ *         not defined. This callback will be needed if or policies have to be
  *         executed.
- * @retval TSS2_FAPI_RC_BAD_VALUE If the computed branch index deliverd by the
+ * @retval TSS2_FAPI_RC_BAD_VALUE If the computed branch index delivered by the
  *         callback does not identify a branch.
  * @retval TSS2_FAPI_RC_MEMORY if not enough memory can be allocated.
  * @retval TSS2_FAPI_RC_BAD_REFERENCE a invalid null pointer is passed.
@@ -1668,6 +1719,10 @@ ifapi_policyeval_execute_prepare(
 }
 
 /** Execute all policy commands defined by a list of policy elements.
+ *
+ * @param[in] esys_ctx Context for execution of policy commands.
+ * @param[in] pol_ctx Context for execution of a list of policy elements.
+ * @param[in] do_flush True to flush session on error, false to not flush.
  *
  * @retval TSS2_RC_SUCCESS on success.
  * @retval TSS2_FAPI_RC_MEMORY: if not enough memory can be allocated.
@@ -1697,7 +1752,8 @@ ifapi_policyeval_execute_prepare(
 TSS2_RC
 ifapi_policyeval_execute(
     ESYS_CONTEXT *esys_ctx,
-    IFAPI_POLICY_EXEC_CTX *current_policy)
+    IFAPI_POLICY_EXEC_CTX *current_policy,
+    bool do_flush)
 
 {
     TSS2_RC r = TSS2_RC_SUCCESS;
@@ -1714,8 +1770,10 @@ ifapi_policyeval_execute(
         return_try_again(r);
 
         if (r != TSS2_RC_SUCCESS) {
-            Esys_FlushContext(esys_ctx, current_policy->session);
-            current_policy->session = ESYS_TR_NONE;
+            if (do_flush) {
+                Esys_FlushContext(esys_ctx, current_policy->session);
+                current_policy->session = ESYS_TR_NONE;
+            }
             ifapi_free_node_list(current_policy->policy_elements);
 
         }

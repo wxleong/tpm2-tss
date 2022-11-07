@@ -293,8 +293,8 @@ Fapi_NvExtend_Finish(
         goto_if_error_reset_state(r, "Initialize NV object", error_cleanup);
 
         /* Store object info in context */
-        nvIndex = command->nv_object.handle;
-        command->esys_handle = context->nv_cmd.nv_object.handle;
+        nvIndex = command->nv_object.public.handle;
+        command->esys_handle = context->nv_cmd.nv_object.public.handle;
         command->nv_obj = object->misc.nv;
 
         /* Determine the kind of authorization to be used. */
@@ -385,15 +385,15 @@ Fapi_NvExtend_Finish(
         event->digests.digests[0].hashAlg = hashAlg;
         event->digests.count = 1;
         event->pcr = object->misc.nv.public.nvPublic.nvIndex;
-        event->type = IFAPI_TSS_EVENT_TAG;
-        memcpy(&event->sub_event.tss_event.data.buffer[0],
+        event->content_type = IFAPI_TSS_EVENT_TAG;
+        memcpy(&event->content.tss_event.data.buffer[0],
                &auxData->buffer[0], auxData->size);
-        event->sub_event.tss_event.data.size = auxData->size;
+        event->content.tss_event.data.size = auxData->size;
         if (command->logData) {
-            strdup_check(event->sub_event.tss_event.event, command->logData,
+            strdup_check(event->content.tss_event.event, command->logData,
                     r, error_cleanup);
         } else {
-            event->sub_event.tss_event.event = NULL;
+            event->content.tss_event.event = NULL;
         }
 
         /* Event log of the NV object has to be extended */
@@ -415,7 +415,7 @@ Fapi_NvExtend_Finish(
             command->jso_event_log = json_object_new_array();
         }
         command->pcr_event.recnum =
-            json_object_array_length(command->jso_event_log) + 1;
+            json_object_array_length(command->jso_event_log);
 
         r = ifapi_json_IFAPI_EVENT_serialize(&command->pcr_event, &jso);
         goto_if_error(r, "Error serialize event", error_cleanup);

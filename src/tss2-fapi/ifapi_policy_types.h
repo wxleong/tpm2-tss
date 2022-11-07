@@ -71,7 +71,7 @@ typedef struct {
 typedef struct {
     char                                        *nvPath;    /**< None */
     TPMI_RH_NV_INDEX                            nvIndex;    /**< None */
-    TPM2B_NV_PUBLIC                            nvPublic;    /**< None */
+    TPMS_NV_PUBLIC                             nvPublic;    /**< None */
     TPMI_RH_NV_AUTH                          authHandle;    /**< This is determined by FAPI at runtime. */
     TPM2B_OPERAND                              operandB;    /**< None */
     UINT16                                       offset;    /**< Default value is 0 */
@@ -120,7 +120,7 @@ typedef struct {
     TPM2B_NAME                            newParentName;    /**< Automatically calculated */
     TPMI_YES_NO                           includeObject;    /**< Always NO */
     char                                 *newParentPath;    /**< None */
-    TPM2B_PUBLIC                        newParentPublic;    /**< None */
+    TPMT_PUBLIC                         newParentPublic;    /**< None */
 } TPMS_POLICYDUPLICATIONSELECT;
 
 /** Policy type TPMS_POLICYAUTHORIZATION
@@ -130,7 +130,7 @@ typedef struct {
     TPMT_PUBLIC                                     key;    /**< Selector of the algorithm used for the signature and the pub */
     TPM2B_NONCE                               policyRef;    /**< None */
     TPMT_SIGNATURE                            signature;    /**< None */
-    TPMI_ALG_HASH                         keyPEMhashAlg;
+    TPMI_ALG_HASH                               hashAlg;
     UINT8_ARY                              pemSignature;
     char                                        *keyPEM;
     TPMT_RSA_SCHEME                           rsaScheme;
@@ -181,7 +181,7 @@ typedef struct {
  */
 typedef struct {
     char                                        *nvPath;    /**< None */
-    TPM2B_NV_PUBLIC                            nvPublic;    /**< None */
+    TPMS_NV_PUBLIC                             nvPublic;    /**< None */
     TPM2B_DIGEST                                 policy;    /**< Policy Digest */
     TPMT_HA                                   nv_policy;    /**< Policy stored in NV ram */
     uint8_t                               *policy_buffer;
@@ -192,21 +192,6 @@ typedef struct {
 typedef struct {
     char                                        *action;    /**< The FAPI will return a string representation of the JSON sub */
 } TPMS_POLICYACTION;
-
-/** Policy type TPMS_PCRVALUE
- */
-typedef struct {
-    UINT32                                          pcr;    /**< None */
-    TPM2_ALG_ID                                 hashAlg;    /**< None */
-    TPMU_HA                                      digest;    /**< None */
-} TPMS_PCRVALUE;
-
-/** Policy type TPML_PCRVALUES
- */
-typedef struct TPML_PCRVALUES {
-    UINT32                                        count;    /**< None */
-    TPMS_PCRVALUE                                pcrs[];    /**< Array of pcr values */
-} TPML_PCRVALUES;
 
 /** Policy type TPMS_POLICYPCR
  */

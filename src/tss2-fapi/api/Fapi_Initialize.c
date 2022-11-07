@@ -23,6 +23,7 @@
 #include "fapi_int.h"
 #include "fapi_util.h"
 #include "ifapi_json_deserialize.h"
+#include "ifapi_policy.h"
 #define LOGMODULE fapi
 #include "util/log.h"
 #include "util/aux_util.h"
@@ -133,6 +134,8 @@ Fapi_Initialize_Async(
 
     memset(&(*context)->cmd.Initialize, 0, sizeof(IFAPI_INITIALIZE));
 
+    ifapi_policy_ctx_init(*context);
+
     /* Initialize the context state for this operation. */
     (*context)->state = INITIALIZE_READ;
 
@@ -195,7 +198,10 @@ Fapi_Initialize_Finish(
         goto_if_error(r, "Could not finish initialization", cleanup_return);
 
         /* Initialize the event log module. */
-        r = ifapi_eventlog_initialize(&((*context)->eventlog), (*context)->config.log_dir);
+        r = ifapi_eventlog_initialize(&((*context)->eventlog),
+                                      (*context)->config.log_dir,
+                                      (*context)->config.firmware_log_file,
+                                      (*context)->config.ima_log_file);
         goto_if_error(r, "Initializing eventlog module", cleanup_return);
 
         /* Initialize the keystore. */

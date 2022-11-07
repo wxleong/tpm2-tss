@@ -11,6 +11,8 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <stddef.h>
+#include <stdlib.h>
 #if defined(__linux__)
 #include <linux/limits.h>
 #elif defined(_MSC_VER)
@@ -460,14 +462,32 @@ TSS2_RC
 Tss2_TctiLdr_Initialize (const char *nameConf,
                          TSS2_TCTI_CONTEXT **tctiContext)
 {
-    char name [PATH_MAX] = { 0, }, conf [PATH_MAX] = { 0, };
+    char *name = NULL;
+    char *conf = NULL;
     TSS2_RC rc;
+    size_t combined_length;
 
     if (nameConf == NULL) {
         return Tss2_TctiLdr_Initialize_Ex (NULL, NULL, tctiContext);
     }
+
+    combined_length = strlen (nameConf);
+    if (combined_length > PATH_MAX - 1) {
+        LOG_ERROR ("combined conf length must be between 0 and PATH_MAX");
+        return TSS2_TCTI_RC_BAD_VALUE;
+    }
+    name = calloc(combined_length + 1, sizeof(char));
+    conf = calloc(combined_length + 1, sizeof(char));
+    if (name == NULL || conf == NULL) {
+        rc = TSS2_TCTI_RC_MEMORY;
+        goto out;
+    }
     rc = tctildr_conf_parse (nameConf, name, conf);
     if (rc != TSS2_RC_SUCCESS)
-        return rc;
-    return Tss2_TctiLdr_Initialize_Ex (name, conf, tctiContext);
+        goto out;
+    rc = Tss2_TctiLdr_Initialize_Ex (name, conf, tctiContext);
+out:
+    SAFE_FREE(name);
+    SAFE_FREE(conf);
+    return rc;
 }

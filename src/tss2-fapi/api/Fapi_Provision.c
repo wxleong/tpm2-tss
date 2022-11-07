@@ -21,6 +21,7 @@
 #include "fapi_int.h"
 #include "fapi_crypto.h"
 #include "fapi_policy.h"
+#include "ifapi_curl.h"
 #include "ifapi_get_intl_cert.h"
 #include "ifapi_helpers.h"
 
@@ -356,6 +357,7 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
     ESYS_TR auth_session;
     TPM2B_NAME *srk_name = NULL, *srk_name_persistent = NULL;
     ESYS_TR srk_persistent_handle;
+    ESYS_TR ek_handle = ESYS_TR_NONE;
 
 
     switch (context->state) {
@@ -398,32 +400,32 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
             /* Use the first appropriate hierarchy for provisioning. The first found
                hierarchy will be copied into the provisioning context.*/
             if (strcmp(path, "/HS") == 0) {
-                command->hierarchies[command->path_idx].handle = ESYS_TR_RH_OWNER;
-                if (!hierarchy_hs->handle) {
+                command->hierarchies[command->path_idx].public.handle = ESYS_TR_RH_OWNER;
+                if (!hierarchy_hs->public.handle) {
                     r = ifapi_copy_ifapi_hierarchy_object(hierarchy_hs,
                                                           &command->
                                                           hierarchies[command->path_idx]);
                     goto_if_error(r, "Copy hierarchy", error_cleanup);
                 }
             } else if (strcmp(path, "/HE") == 0) {
-                command->hierarchies[command->path_idx].handle = ESYS_TR_RH_ENDORSEMENT;
-                if (!hierarchy_he->handle) {
+                command->hierarchies[command->path_idx].public.handle = ESYS_TR_RH_ENDORSEMENT;
+                if (!hierarchy_he->public.handle) {
                     r = ifapi_copy_ifapi_hierarchy_object(hierarchy_he,
                                                           &command->
                                                           hierarchies[command->path_idx]);
                     goto_if_error(r, "Copy hierarchy", error_cleanup);
                 }
             } else if (strcmp(path, "/HN") == 0) {
-                command->hierarchies[command->path_idx].handle = ESYS_TR_RH_NULL;
-                if (!hierarchy_hn->handle) {
+                command->hierarchies[command->path_idx].public.handle = ESYS_TR_RH_NULL;
+                if (!hierarchy_hn->public.handle) {
                     r = ifapi_copy_ifapi_hierarchy_object(hierarchy_hn,
                                                           &command->
                                                           hierarchies[command->path_idx]);
                     goto_if_error(r, "Copy hierarchy", error_cleanup);
                 }
             } else if (strcmp(path, "/LOCKOUT") == 0) {
-                command->hierarchies[command->path_idx].handle = ESYS_TR_RH_LOCKOUT;
-                if (!hierarchy_lockout->handle) {
+                command->hierarchies[command->path_idx].public.handle = ESYS_TR_RH_LOCKOUT;
+                if (!hierarchy_lockout->public.handle) {
                     r = ifapi_copy_ifapi_hierarchy_object(hierarchy_lockout,
                                                           &command->
                                                           hierarchies[command->path_idx]);
@@ -582,18 +584,33 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
 
             /* Check whether a persistent EK handle was defined in profile. */
             if (command->public_templ.persistent_handle) {
-
                 pkey->persistent_handle = command->public_templ.persistent_handle;
 
-                /* Prepare making the EK permanent. */
-                r = Esys_EvictControl_Async(context->esys, hierarchy_hs->handle,
-                        pkeyObject->handle, ESYS_TR_PASSWORD, ESYS_TR_NONE,
-                        ESYS_TR_NONE, pkey->persistent_handle);
-                goto_if_error(r, "Error Esys EvictControl", error_cleanup);
-                context->state = PROVISION_WAIT_FOR_EK_PERSISTENT;
+                if (hierarchy_hs->misc.hierarchy.with_auth == TPM2_YES ||
+                    hierarchy_hs->misc.hierarchy.authPolicy.size) {
+                    context->state = PROVISION_AUTHORIZE_HS_FOR_EK_EVICT;
+                    auth_session = ESYS_TR_PASSWORD;
+                } else {
+                    context->state = PROVISION_PREPARE_EK_EVICT;
+                }
                 return TSS2_FAPI_RC_TRY_AGAIN;
             }
+            context->state = PROVISION_INIT_GET_CAP2;
+            return TSS2_FAPI_RC_TRY_AGAIN;
+
+        statecase(context->state, PROVISION_AUTHORIZE_HS_FOR_EK_EVICT);
+            r = ifapi_authorize_object(context, hierarchy_hs, &auth_session);
+            FAPI_SYNC(r, "Authorize hierarchy.", error_cleanup);
             fallthrough;
+
+        statecase(context->state, PROVISION_PREPARE_EK_EVICT);
+            r = Esys_EvictControl_Async(context->esys, hierarchy_hs->public.handle,
+                     pkeyObject->public.handle, ESYS_TR_PASSWORD, ESYS_TR_NONE,
+                     ESYS_TR_NONE, pkey->persistent_handle);
+
+            goto_if_error(r, "Error Esys EvictControl", error_cleanup);
+            context->state = PROVISION_WAIT_FOR_EK_PERSISTENT;
+            return TSS2_FAPI_RC_TRY_AGAIN;
 
         statecase(context->state, PROVISION_INIT_GET_CAP2);
             if (context->config.ek_cert_less == TPM2_YES) {
@@ -822,9 +839,35 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
 
             fallthrough;
 
+        statecase(context->state, PROVISION_PREPARE_READ_INT_CERT);
+	    const char *int_ca_file;
+
+            /* Prepare reading of intermediate certificate. */
+            int_ca_file = NULL;
+#ifdef SELF_GENERATED_CERTIFICATE
+#pragma message ( "*** Allow self generated certifcate ***" )
+            int_ca_file = getenv("FAPI_TEST_INT_CERT");
+#endif
+            if (!int_ca_file) {
+                context->state = PROVISION_EK_CHECK_CERT;
+                return TSS2_FAPI_RC_TRY_AGAIN;
+            }
+            r = ifapi_io_read_async(&context->io, int_ca_file);
+            return_try_again(r);
+            goto_if_error2(r, "Reading certificate %s", error_cleanup, int_ca_file);
+
+	        fallthrough;
+
+        statecase(context->state, PROVISION_READ_INT_CERT);
+            r = ifapi_io_read_finish(&context->io, (uint8_t **) &command->intermed_crt, NULL);
+            return_try_again(r);
+            goto_if_error(r, "Reading intermediate certificate failed", error_cleanup);
+
+            fallthrough;
+
         statecase(context->state, PROVISION_EK_CHECK_CERT);
             /* The EK certificate will be verified against the FAPI list of root certificates. */
-            r = ifapi_verify_ek_cert(command->root_crt, command->intermed_crt, command->pem_cert);
+            r = ifapi_curl_verify_ek_cert(command->root_crt, command->intermed_crt, command->pem_cert);
             SAFE_FREE(command->root_crt);
             SAFE_FREE(command->intermed_crt);
             goto_if_error2(r, "Verify EK certificate", error_cleanup);
@@ -1013,8 +1056,8 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
                 pkey->persistent_handle = command->public_templ.persistent_handle;
 
                 /* Prepare making the SRK permanent. */
-                r = Esys_EvictControl_Async(context->esys, hierarchy_hs->handle,
-                    pkeyObject->handle, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                r = Esys_EvictControl_Async(context->esys, hierarchy_hs->public.handle,
+                    pkeyObject->public.handle, ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
                     pkey->persistent_handle);
                 goto_if_error(r, "Error Esys EvictControl", error_cleanup);
 
@@ -1083,8 +1126,7 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
              * Adaption of the lockout hierarchy to the passed parameters
              * and the current profile.
              */
-            if (!command->authValueLockout ||
-                strcmp(command->authValueLockout, "") == 0) {
+            if (!command->authValueLockout) {
                 context->state = PROVISION_LOCKOUT_CHANGE_POLICY;
                 /* Auth value of lockout hierarchy will not be changed. */
                 return TSS2_FAPI_RC_TRY_AGAIN;
@@ -1111,39 +1153,34 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
             return TSS2_FAPI_RC_TRY_AGAIN;
 
         statecase(context->state, PROVISION_WAIT_FOR_SRK_PERSISTENT);
-            r = Esys_EvictControl_Finish(context->esys, &pkeyObject->handle);
+            r = Esys_EvictControl_Finish(context->esys, &pkeyObject->public.handle);
             return_try_again(r);
             goto_if_error(r, "Evict control failed", error_cleanup);
 
             /* The SRK was made persistent and can be written to key store. */
             command->srk_tpm_handle = pkeyObject->misc.key.persistent_handle;
-            command->srk_esys_handle = pkeyObject->handle;
+            command->srk_esys_handle = pkeyObject->public.handle;
             context->state = PROVISION_SRK_WRITE_PREPARE;
             return TSS2_FAPI_RC_TRY_AGAIN;
 
         statecase(context->state, PROVISION_WAIT_FOR_EK_PERSISTENT);
-            r = Esys_EvictControl_Finish(context->esys, &pkeyObject->handle);
+            ek_handle = pkeyObject->public.handle;
+            r = Esys_EvictControl_Finish(context->esys, &pkeyObject->public.handle);
             return_try_again(r);
 
-            /* Retry with authorization callback after trial with null auth */
-            if (number_rc(r) == TPM2_RC_BAD_AUTH &&
-                hierarchy_hs->misc.hierarchy.with_auth == TPM2_NO) {
-                char* description;
-                r = ifapi_get_description(hierarchy_hs, &description);
-                return_if_error(r, "Get description");
-
-                r = ifapi_set_auth(context, hierarchy_hs, "CreatePrimary");
-                SAFE_FREE(description);
-                goto_if_error_reset_state(r, "Create EK", error_cleanup);
-
+            if (number_rc(r) == TPM2_RC_BAD_AUTH
+                && hierarchy_hs->misc.hierarchy.with_auth == TPM2_NO) {
                 hierarchy_hs->misc.hierarchy.with_auth = TPM2_YES;
-                context->state =  PROVISION_WAIT_FOR_SRK_PERSISTENT;
+                /* Public handle was changed to 0xfff in the error case. */
+                pkeyObject->public.handle = ek_handle;
+                context->state = PROVISION_AUTHORIZE_HS_FOR_EK_EVICT;
                 return TSS2_FAPI_RC_TRY_AGAIN;
             }
+
             goto_if_error(r, "Evict control failed", error_cleanup);
 
             command->ek_tpm_handle = pkeyObject->misc.key.persistent_handle;
-            command->ek_esys_handle = pkeyObject->handle;
+            command->ek_esys_handle = pkeyObject->public.handle;
 
             context->state = PROVISION_INIT_GET_CAP2;
             return TSS2_FAPI_RC_TRY_AGAIN;
@@ -1407,17 +1444,17 @@ Fapi_Provision_Finish(FAPI_CONTEXT *context)
                exist in the keystore. If all files are written the provisioning
                is continued at the appropriate next state. */
             if (command->path_idx == command->numHierarchyObjects) {
-                if (command->hierarchy->handle == ESYS_TR_RH_OWNER)
+                if (command->hierarchy->public.handle == ESYS_TR_RH_OWNER)
                     context->state = PROVISION_PREPARE_NULL;
-                if (command->hierarchy->handle == ESYS_TR_RH_NULL)
+                if (command->hierarchy->public.handle == ESYS_TR_RH_NULL)
                     context->state = PROVISION_FINISHED;
-                else if (command->hierarchy->handle == ESYS_TR_RH_ENDORSEMENT)
+                else if (command->hierarchy->public.handle == ESYS_TR_RH_ENDORSEMENT)
                     context->state = PROVISION_CHANGE_SH_CHECK;
-                else if (command->hierarchy->handle == ESYS_TR_RH_LOCKOUT)
+                else if (command->hierarchy->public.handle == ESYS_TR_RH_LOCKOUT)
                     context->state = PROVISION_CHANGE_EH_CHECK;
                 return TSS2_FAPI_RC_TRY_AGAIN;
             }
-            if (command->hierarchies[command->path_idx].handle == command->hierarchy->handle) {
+            if (command->hierarchies[command->path_idx].public.handle == command->hierarchy->public.handle) {
                 r = ifapi_keystore_store_async(&context->keystore, &context->io,
                                                command->pathlist[command->path_idx],
                                                command->hierarchy);

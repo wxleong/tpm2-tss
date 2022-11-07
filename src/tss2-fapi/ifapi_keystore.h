@@ -14,6 +14,7 @@
 #include "fapi_types.h"
 #include "ifapi_policy_types.h"
 #include "tss2_esys.h"
+#include "tss2_policy.h"
 
 typedef UINT32 IFAPI_OBJECT_TYPE_CONSTANT;
 #define IFAPI_OBJ_NONE                 0    /**< Tag for key resource */
@@ -31,6 +32,7 @@ typedef struct {
     UINT8_ARY                             serialization;    /**< None */
     UINT8_ARY                                   private;    /**< None */
     char                                *policyInstance;    /**<  Keys policy */
+    TPM2B_DIGEST                            creationHash;   /**< Hash create by Create or CreatePrimary */
     TPM2B_CREATION_DATA                    creationData;    /**< None */
     TPMT_TK_CREATION                     creationTicket;    /**< None */
     char                                   *description;    /**< Human readable description of key */
@@ -41,6 +43,8 @@ typedef struct {
     TPMI_YES_NO                               with_auth;    /**< Authorization provided during creation */
     UINT32                                  reset_count;    /**< The TPM reset count during key creation */
     TPMI_YES_NO                       delete_prohibited;    /**< Persistent object should not be deleted.  */
+    TPMI_YES_NO                              ek_profile;    /**< Has to be set if EK is created according
+                                                                 to EK credential profile: */
 } IFAPI_KEY;
 
 /** Type for representing a external public key
@@ -138,15 +142,26 @@ enum IFAPI_IO_STATE {
     IO_ACTIVE,
 };
 
+#define TSS2_OBJECT_TO_IFAPI_OBJECT(p) ((IFAPI_OBJECT *)p)
+
 /** Type for representing TPM-Resource
  */
 typedef struct _IFAPI_OBJECT {
+    /* TSS2_OBJECT MUST GO FIRST. In C pointer of first element
+     * is equal to pointer of base type, use this to hide data by
+     * only passing pointer to public in callbacks, however, internal
+     * FAPI code can do a simple upcast it back to the original.
+     *
+     * **NOTE**: One could use offset of, and play the same trick
+     * the linux kernel linked list uses with container_of, but
+     * since offsetof isn't C99, we won't use it here.
+     */
+    TSS2_OBJECT                                  public;    /**< public fields of an IFAPI_OBJECT */
     TPMS_POLICY                                 *policy;
     IFAPI_OBJECT_TYPE_CONSTANT               objectType;    /**< Selector for object type */
     IFAPI_OBJECT_UNION                             misc;    /**< Resource specific information */
     TPMI_YES_NO                                  system;    /**< Store the object in the system wide
                                                              directory */
-    ESYS_TR                                      handle;    /**< Handle used by ESAPI */
     enum IFAPI_AUTHORIZATION_STATE  authorization_state;    /**< State of object authorization state machine */
     enum IFAPI_IO_STATE                           state;
     const char                                *rel_path;    /**< The relative path in keystore. */

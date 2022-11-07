@@ -1486,6 +1486,8 @@ ifapi_copy_ifapi_key(IFAPI_KEY * dest, const IFAPI_KEY * src) {
     dest->signing_scheme = src->signing_scheme;
     dest->name = src->name;
     dest->with_auth = src->with_auth;
+    dest->delete_prohibited = src->delete_prohibited;
+    dest->ek_profile = src->ek_profile;
 
     return r;
 
@@ -1656,7 +1658,7 @@ ifapi_copy_ifapi_key_object(IFAPI_OBJECT * dest, const IFAPI_OBJECT * src) {
 
     dest->objectType = src->objectType;
     dest->system = src->system;
-    dest->handle = src->handle;
+    dest->public.handle = src->public.handle;
     dest->authorization_state = src->authorization_state;
 
     return r;
@@ -1702,7 +1704,7 @@ ifapi_copy_ifapi_hierarchy_object(IFAPI_OBJECT * dest, const IFAPI_OBJECT * src)
 
     dest->objectType = src->objectType;
     dest->system = src->system;
-    dest->handle = src->handle;
+    dest->public.handle = src->public.handle;
     dest->authorization_state = src->authorization_state;
 
     return r;

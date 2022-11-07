@@ -9,6 +9,7 @@
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "tss2_esys.h"
 
@@ -106,6 +107,21 @@ test_esys_hmac(ESYS_CONTEXT * esys_context)
         TPM2_ALG_SHA256,
         &outHMAC);
     goto_if_error(r, "Error: HMAC", error);
+
+    TPM2B_DIGEST dig = { .size = 20,
+                                     .buffer={0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0,
+                                              1, 2, 3, 4, 5, 6, 7, 8, 9}} ;
+    TPMT_TK_VERIFIED *validation = NULL;
+    TPMT_SIGNATURE sig;
+
+    sig.signature.hmac.hashAlg = TPM2_ALG_SHA256;
+    sig.sigAlg = TPM2_ALG_HMAC;
+    memcpy(sig.signature.hmac.digest.sha256, outHMAC->buffer, outHMAC->size);
+
+    r = Esys_VerifySignature(esys_context, primaryHandle, ESYS_TR_NONE,
+                             ESYS_TR_NONE, ESYS_TR_NONE, &dig, &sig,
+                             &validation);
+    goto_if_error(r, "Error: VerifySignature", error);
 
     r = Esys_FlushContext(esys_context, primaryHandle);
     goto_if_error(r, "Error: FlushContext", error);

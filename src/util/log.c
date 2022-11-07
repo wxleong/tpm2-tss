@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -20,6 +21,18 @@
 #define likely(x)       (x)
 #define unlikely(x)     (x)
 #endif
+
+#if MAXLOGLEVEL != LOGL_NONE
+
+static const char *log_strings[] = {
+    "none",
+    "(unused)",
+    "ERROR",
+    "WARNING",
+    "info",
+    "debug",
+    "trace"
+};
 
 /**
  * Compares two strings byte by byte and ignores the
@@ -244,3 +257,4 @@ getLogLevel(const char *module, log_level logdefault)
     }
     return loglevel;
 }
+#endif

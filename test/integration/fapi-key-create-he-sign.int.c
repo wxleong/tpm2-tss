@@ -24,9 +24,41 @@
 
 #define PASSWORD "abc"
 #define SIGN_TEMPLATE  "sign,noDa"
-#ifndef FAPI_PROFILE
-#define FAPI_PROFILE "P_ECC"
-#endif /* FAPI_PROFILE */
+
+static bool cb_called = false;
+
+static TSS2_RC
+branch_callback(
+    char   const *objectPath,
+    char   const *description,
+    char  const **branchNames,
+    size_t        numBranches,
+    size_t       *selectedBranch,
+    void         *userData)
+{
+    UNUSED(description);
+    UNUSED(userData);
+
+    if (numBranches != 2) {
+        LOG_ERROR("Wrong number of branches");
+        return TSS2_FAPI_RC_GENERAL_FAILURE;
+    }
+
+    /* The policy branch A A will be used. */
+
+    if (!strcmp(branchNames[0], "A"))
+        *selectedBranch = 0;
+    else if (!strcmp(branchNames[1], "B"))
+        *selectedBranch = 1;
+    else {
+        LOG_ERROR("BranchName not found. Got \"%s\" and \"%s\"",
+                  branchNames[0], branchNames[1]);
+        return TSS2_FAPI_RC_GENERAL_FAILURE;
+    }
+
+    cb_called = true;
+    return TSS2_RC_SUCCESS;
+}
 
 static TSS2_RC
 auth_callback(
@@ -71,12 +103,15 @@ test_fapi_key_create_he_sign(FAPI_CONTEXT *context)
     char          *publicKey = NULL;
     char          *path_list = NULL;
 
-    if (strcmp("P_ECC", fapi_profile) != 0)
+    if (strncmp("P_ECC", fapi_profile, 5) != 0)
         sigscheme = "RSA_PSS";
 
     /* We need to reset the passwords again, in order to not brick physical TPMs */
     r = Fapi_Provision(context, NULL, NULL, NULL);
     goto_if_error(r, "Error Fapi_Provision", error);
+
+    r = Fapi_SetBranchCB(context, branch_callback, NULL);
+    goto_if_error(r, "Error SetPolicybranchselectioncallback", error);
 
     r = Fapi_SetAuthCB(context, auth_callback, NULL);
     goto_if_error(r, "Error SetPolicyAuthCallback", error);

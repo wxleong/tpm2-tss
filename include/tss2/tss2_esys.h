@@ -62,9 +62,314 @@ typedef uint32_t ESYS_TR;
 #define ESYS_TR_RH_AUTH(x) (ESYS_TR_RH_AUTH_FIRST + (ESYS_TR)(x))
 #define ESYS_TR_RH_ACT_FIRST  0x120U
 #define ESYS_TR_RH_ACT(x) (ESYS_TR_RH_ACT_FIRST + (ESYS_TR)(x))
-#define ESYS_TR_RH_ACT_LAST  0x12FU
+#define ESYS_TR_RH_ACT_0       ESYS_TR_RH_ACT_FIRST
+#define ESYS_TR_RH_ACT_1       0x121U
+#define ESYS_TR_RH_ACT_2       0x122U
+#define ESYS_TR_RH_ACT_3       0x123U
+#define ESYS_TR_RH_ACT_4       0x124U
+#define ESYS_TR_RH_ACT_5       0x125U
+#define ESYS_TR_RH_ACT_6       0x126U
+#define ESYS_TR_RH_ACT_7       0x127U
+#define ESYS_TR_RH_ACT_8       0x128U
+#define ESYS_TR_RH_ACT_9       0x129U
+#define ESYS_TR_RH_ACT_A       0x12AU
+#define ESYS_TR_RH_ACT_B       0x12BU
+#define ESYS_TR_RH_ACT_C       0x12CU
+#define ESYS_TR_RH_ACT_D       0x12DU
+#define ESYS_TR_RH_ACT_E       0x12EU
+#define ESYS_TR_RH_ACT_F       0x12FU
+#define ESYS_TR_RH_ACT_LAST    ESYS_TR_RH_ACT_F
+#define ESYS_TR_RH_AC_FIRST    0x140U
+#define ESYS_TR_RH_AC(x)       (ESYS_TR_RH_AC_FIRST + (ESYS_TR)(x))
+#define ESYS_TR_RH_AC_LAST     (ESYS_TR_RH_AC_FIRST  + 0xFFFFU)
 
 typedef struct ESYS_CONTEXT ESYS_CONTEXT;
+
+typedef struct ESYS_CRYPTO_CONTEXT_BLOB ESYS_CRYPTO_CONTEXT_BLOB;
+
+/*
+ * Crypto Backend Support
+ */
+
+/** Provide the context for the computation of a hash digest.
+ *
+ * The context will be created and initialized according to the hash function.
+ * @param[out] context The created context (callee-allocated).
+ * @param[in] hashAlg The hash algorithm for the creation of the context.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_HASH_START_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB ** context,
+        TPM2_ALG_ID hashAlg,
+        void *userdata);
+
+/** Update the digest value of a digest object from a byte buffer.
+ *
+ * The context of a digest object will be updated according to the hash
+ * algorithm of the context. <
+ * @param[in,out] context The context of the digest object which will be updated.
+ * @param[in] buffer The data for the update.
+ * @param[in] size The size of the data buffer.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_HASH_UPDATE_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB * context,
+        const uint8_t *buffer,
+        size_t size,
+        void *userdata);
+
+/** Get the digest value of a digest object and close the context.
+ *
+ * The digest value will written to a passed buffer and the resources of the
+ * digest object are released.
+ * @param[in,out] context The context of the digest object to be released
+ * @param[out] buffer The buffer for the digest value (caller-allocated).
+ * @param[out] size The size of the digest.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_HASH_FINISH_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB **context,
+        uint8_t *buffer,
+        size_t *size,
+        void *userdata);
+
+/** Release the resources of a digest object.
+ *
+ * The assigned resources will be released and the context will be set to NULL.
+ * @param[in,out] context The context of the digest object.
+ * @param[in/out] userdata information.
+ */
+typedef void
+    (*ESYS_CRYPTO_HASH_ABORT_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB **context,
+        void *userdata);
+
+/** Provide the context an HMAC digest object from a byte buffer key.
+ *
+ * The context will be created and initialized according to the hash function
+ * and the used HMAC key.
+ * @param[out] context The created context (callee-allocated).
+ * @param[in] hashAlg The hash algorithm for the HMAC computation.
+ * @param[in] key The byte buffer of the HMAC key.
+ * @param[in] size The size of the HMAC key.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_HMAC_START_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB **context,
+        TPM2_ALG_ID hashAlg,
+        const uint8_t *key,
+        size_t size,
+        void *userdata);
+
+/** Update and HMAC digest value from a byte buffer.
+ *
+ * The context of a digest object will be updated according to the hash
+ * algorithm and the key of the context.
+ * @param[in,out] context The context of the digest object which will be updated.
+ * @param[in] buffer The data for the update.
+ * @param[in] size The size of the data buffer.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_HMAC_UPDATE_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB *context,
+        const uint8_t *buffer,
+        size_t size,
+        void *userdata);
+
+/** Write the HMAC digest value to a byte buffer and close the context.
+ *
+ * The digest value will written to a passed buffer and the resources of the
+ * HMAC object are released.
+ * @param[in,out] context The context of the HMAC object.
+ * @param[out] buffer The buffer for the digest value (caller-allocated).
+ * @param[out] size The size of the digest.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_HMAC_FINISH_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB **context,
+        uint8_t *buffer,
+        size_t *size,
+        void *userdata);
+
+/** Release the resources of an HMAC object.
+ *
+ * The assigned resources will be released and the context will be set to NULL.
+ * @param[in,out] context The context of the HMAC object.
+ * @param[in/out] userdata information.
+ */
+typedef void
+    (*ESYS_CRYPTO_HMAC_ABORT_FNP)(
+        ESYS_CRYPTO_CONTEXT_BLOB **context,
+        void *userdata);
+
+/** Compute random TPM2B data.
+ *
+ * The random data will be generated and written to a passed TPM2B structure.
+ * @param[out] nonce The TPM2B structure for the random data (caller-allocated).
+ * @param[in] num_bytes The number of bytes to be generated.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success.
+ * @retval USER_DEFINED user defined errors on failure.
+ * @note: the TPM should not be used to obtain the random data
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_GET_RANDOM2B_FNP)(
+        TPM2B_NONCE *nonce,
+        size_t num_bytes,
+        void *userdata);
+
+/** Computation of an ephemeral ECC key and shared secret Z.
+ *
+ * According to the description in TPM spec part 1 C 6.1 a shared secret
+ * between application and TPM is computed (ECDH). An ephemeral ECC key and a
+ * TPM key are used for the ECDH key exchange.
+ * @param[in] key The key to be used for ECDH key exchange.
+ * @param[in] max_out_size the max size for the output of the public key of the
+ *            computed ephemeral key.
+ * @param[out] Z The computed shared secret.
+ * @param[out] Q The public part of the ephemeral key in TPM format.
+ * @param[out] out_buffer The public part of the ephemeral key will be marshaled
+ *             to this buffer.
+ * @param[out] out_size The size of the marshaled output.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_GET_ECDH_POINT_FNP)(
+        TPM2B_PUBLIC *key,
+        size_t max_out_size,
+        TPM2B_ECC_PARAMETER *Z,
+        TPMS_ECC_POINT *Q,
+        BYTE *out_buffer,
+        size_t *out_size,
+        void *userdata);
+
+/** Encrypt data with AES.
+ *
+ * @param[in] key key used for AES.
+ * @param[in] tpm_sym_alg AES type in TSS2 notation (must be TPM2_ALG_AES).
+ * @param[in] key_bits Key size in bits.
+ * @param[in] tpm_mode Block cipher mode of opertion in TSS2 notation (CFB).
+ *            For parameter encryption only CFB can be used.
+ * @param[in,out] buffer Data to be encrypted. The encrypted date will be stored
+ *                in this buffer.
+ * @param[in] buffer_size size of data to be encrypted.
+ * @param[in] iv The initialization vector.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_AES_ENCRYPT_FNP)(
+        uint8_t *key,
+        TPM2_ALG_ID tpm_sym_alg,
+        TPMI_AES_KEY_BITS key_bits,
+        TPM2_ALG_ID tpm_mode,
+        uint8_t *buffer,
+        size_t buffer_size,
+        uint8_t *iv,
+        void *userdata);
+
+/** Decrypt data with AES.
+ *
+ * @param[in] key key used for AES.
+ * @param[in] tpm_sym_alg AES type in TSS2 notation (must be TPM2_ALG_AES).
+ * @param[in] key_bits Key size in bits.
+ * @param[in] tpm_mode Block cipher mode of opertion in TSS2 notation (CFB).
+ *            For parameter encryption only CFB can be used.
+ * @param[in,out] buffer Data to be decrypted. The decrypted date will be stored
+ *                in this buffer.
+ * @param[in] buffer_size size of data to be encrypted.
+ * @param[in] iv The initialization vector.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_AES_DECRYPT_FNP)(
+        uint8_t *key,
+        TPM2_ALG_ID tpm_sym_alg,
+        TPMI_AES_KEY_BITS key_bits,
+        TPM2_ALG_ID tpm_mode,
+        uint8_t *buffer,
+        size_t buffer_size,
+        uint8_t *iv,
+        void *userdata);
+
+/** Encryption of a buffer using a public (RSA) key.
+ *
+ * Encrypting a buffer using a public key is used for example during
+ * Esys_StartAuthSession in order to encrypt the salt value.
+ * @param[in] pub_tpm_key The key to be used for encryption.
+ * @param[in] in_size The size of the buffer to be encrypted.
+ * @param[in] in_buffer The data buffer to be encrypted.
+ * @param[in] max_out_size The maximum size for the output encrypted buffer.
+ * @param[out] out_buffer The encrypted buffer.
+ * @param[out] out_size The size of the encrypted output.
+ * @param[in] label The label used in the encryption scheme.
+ * @param[in/out] userdata information.
+ * @retval TSS2_RC_SUCCESS on success
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC
+    (*ESYS_CRYPTO_PK_RSA_ENCRYPT_FNP)(
+        TPM2B_PUBLIC * pub_tpm_key,
+        size_t in_size,
+        BYTE *in_buffer,
+        size_t max_out_size,
+        BYTE *out_buffer,
+        size_t *out_size,
+        const char *label,
+        void *userdata);
+
+/** Initialize crypto backend.
+ *
+ * Initialize internal tables of crypto backend.
+ *
+ * @param[in/out] userdata Optional userdata pointer.
+ *
+ * @retval TSS2_RC_SUCCESS ong success.
+ * @retval USER_DEFINED user defined errors on failure.
+ */
+typedef TSS2_RC (*ESYS_CRYPTO_INIT_FNP)(void *userdata);
+
+typedef struct ESYS_CRYPTO_CALLBACKS ESYS_CRYPTO_CALLBACKS;
+struct ESYS_CRYPTO_CALLBACKS {
+    ESYS_CRYPTO_PK_RSA_ENCRYPT_FNP rsa_pk_encrypt;
+    ESYS_CRYPTO_HASH_START_FNP hash_start;
+    ESYS_CRYPTO_HASH_UPDATE_FNP hash_update;
+    ESYS_CRYPTO_HASH_FINISH_FNP hash_finish;
+    ESYS_CRYPTO_HASH_ABORT_FNP hash_abort;
+    ESYS_CRYPTO_HMAC_START_FNP hmac_start;
+    ESYS_CRYPTO_HMAC_UPDATE_FNP hmac_update;
+    ESYS_CRYPTO_HMAC_FINISH_FNP hmac_finish;
+    ESYS_CRYPTO_HMAC_ABORT_FNP hmac_abort;
+    ESYS_CRYPTO_GET_RANDOM2B_FNP get_random2b;
+    ESYS_CRYPTO_GET_ECDH_POINT_FNP get_ecdh_point;
+    ESYS_CRYPTO_AES_ENCRYPT_FNP aes_encrypt;
+    ESYS_CRYPTO_AES_DECRYPT_FNP aes_decrypt;
+    ESYS_CRYPTO_INIT_FNP init;
+    void *userdata;
+};
 
 /*
  * TPM 2.0 ESAPI Functions
@@ -519,6 +824,88 @@ Esys_ACT_SetTimeout_Async(
 TSS2_RC
 Esys_ACT_SetTimeout_Finish(
     ESYS_CONTEXT *esysContext);
+
+TSS2_RC
+Esys_AC_GetCapability_Async(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR optionalSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    ESYS_TR ac,
+    TPM_AT capability,
+    UINT32 count);
+
+TSS2_RC
+Esys_AC_GetCapability_Finish(
+    ESYS_CONTEXT *esysContext,
+    TPMI_YES_NO *moreData,
+    TPML_AC_CAPABILITIES **capabilityData);
+
+TSS2_RC
+Esys_AC_GetCapability(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR optionalSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    ESYS_TR ac,
+    TPM_AT capability,
+    UINT32 count,
+    TPMI_YES_NO *moreData,
+    TPML_AC_CAPABILITIES **capabilityData);
+
+TSS2_RC
+Esys_AC_Send_Async(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR sendObject,
+    ESYS_TR nvAuthHandle,
+    ESYS_TR optionalSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    ESYS_TR ac,
+    TPM2B_MAX_BUFFER *acDataIn);
+
+TSS2_RC
+Esys_AC_Send_Finish(
+    ESYS_CONTEXT *esysContext,
+    TPMS_AC_OUTPUT **acDataOut);
+
+TSS2_RC
+Esys_AC_Send(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR sendObject,
+    ESYS_TR nvAuthHandle,
+    ESYS_TR optionalSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    ESYS_TR ac,
+    TPM2B_MAX_BUFFER *acDataIn,
+    TPMS_AC_OUTPUT **acDataOut);
+
+TSS2_RC
+Esys_Policy_AC_SendSelect_Async(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR policySession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    TPM2B_NAME *objectName,
+    TPM2B_NAME *authHandleName,
+    TPM2B_NAME *acName,
+    const TPMI_YES_NO includeObject);
+
+TSS2_RC
+Esys_Policy_AC_SendSelect_Finish(
+    ESYS_CONTEXT *esysContext);
+
+TSS2_RC
+Esys_Policy_AC_SendSelect(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR policySession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    TPM2B_NAME *objectName,
+    TPM2B_NAME *authHandleName,
+    TPM2B_NAME *acName,
+    TPMI_YES_NO includeObject);
 
 /* Table 29 - TPM2_MakeCredential Command */
 
@@ -1032,6 +1419,32 @@ Esys_HMAC_Finish(
     ESYS_CONTEXT *esysContext,
     TPM2B_DIGEST **outHMAC);
 
+TSS2_RC
+Esys_MAC_Async(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR handle,
+    ESYS_TR handleSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    const TPM2B_MAX_BUFFER *buffer,
+    TPMI_ALG_MAC_SCHEME inScheme);
+
+TSS2_RC
+Esys_MAC_Finish(
+    ESYS_CONTEXT *esysContext,
+    TPM2B_DIGEST **outMAC);
+
+TSS2_RC
+Esys_MAC(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR handle,
+    ESYS_TR handleSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    const TPM2B_MAX_BUFFER *buffer,
+    TPMI_ALG_MAC_SCHEME inScheme,
+    TPM2B_DIGEST **outMAC);
+
 /* Table 66 - TPM2_GetRandom Command */
 
 TSS2_RC
@@ -1103,6 +1516,31 @@ Esys_HMAC_Start_Async(
 
 TSS2_RC
 Esys_HMAC_Start_Finish(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR *sequenceHandle);
+
+TSS2_RC
+Esys_MAC_Start(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR handle,
+    ESYS_TR handleSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    const TPM2B_AUTH *auth,
+    TPMI_ALG_MAC_SCHEME inScheme,
+    ESYS_TR *sequenceHandle);
+
+TSS2_RC
+Esys_MAC_Start_Async(
+    ESYS_CONTEXT *esysContext,
+    ESYS_TR handle,
+    ESYS_TR handleSession1,
+    ESYS_TR optionalSession2,
+    ESYS_TR optionalSession3,
+    const TPM2B_AUTH *auth,
+    TPMI_ALG_MAC_SCHEME inScheme);
+
+TSS2_RC Esys_MAC_Start_Finish(
     ESYS_CONTEXT *esysContext,
     ESYS_TR *sequenceHandle);
 
@@ -3301,6 +3739,11 @@ TSS2_RC
 Esys_GetSysContext(
     ESYS_CONTEXT *esys_context,
     TSS2_SYS_CONTEXT **sys_context);
+
+TSS2_RC
+Esys_SetCryptoCallbacks(
+    ESYS_CONTEXT *esysContext,
+    ESYS_CRYPTO_CALLBACKS *callbacks);
 
 #ifdef __cplusplus
 }
